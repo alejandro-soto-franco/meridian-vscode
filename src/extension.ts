@@ -9,6 +9,7 @@ import {
   DashboardState, SorriesProvider, GapsProvider, CoverageProvider, CommandsProvider,
   ingestSorryInventory, ingestGapReport, ingestCoverage,
 } from "./tree";
+import { scanFileForSorries } from "./scanner";
 
 const dash = new DashboardState();
 let output: vscode.OutputChannel;
@@ -48,18 +49,29 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand("meridian.showOutput", () => output.show(true)),
   );
 
-  // Auto-refresh on save.
+  // Sidebar Sorries view: refresh on active editor change AND on save (current file only).
+  const refreshSorriesForActive = () => {
+    const doc = vscode.window.activeTextEditor?.document;
+    if (!doc || doc.languageId !== "lean4") {
+      dash.update({ sorries: [] });
+      return;
+    }
+    dash.update({ sorries: scanFileForSorries(doc) });
+  };
   context.subscriptions.push(
+    vscode.window.onDidChangeActiveTextEditor(refreshSorriesForActive),
     vscode.workspace.onDidSaveTextDocument((doc) => {
-      const cfg = vscode.workspace.getConfiguration("meridian");
-      if (!cfg.get<boolean>("autoRefreshOnSave", true)) return;
       if (doc.languageId !== "lean4") return;
-      refreshDashboard(context).catch(() => {});
+      if (doc === vscode.window.activeTextEditor?.document) refreshSorriesForActive();
+    }),
+    vscode.workspace.onDidChangeTextDocument((e) => {
+      if (e.document === vscode.window.activeTextEditor?.document &&
+          e.document.languageId === "lean4") {
+        refreshSorriesForActive();
+      }
     }),
   );
-
-  // Initial population (non-blocking).
-  refreshDashboard(context).catch(() => {});
+  refreshSorriesForActive();
 }
 
 export function deactivate() {}
@@ -131,14 +143,14 @@ async function runReport(context: vscode.ExtensionContext, title: string, comman
   show(context, title, html);
 
   // Also feed the dashboard when relevant.
-  if (command === "#sorry_inventory_all") ingestSorryInventory(dash, result.stderr, result.stdout);
+  if (command === "#sorry_inventory") ingestSorryInventory(dash, result.stderr, result.stdout);
   if (command === "#gap_report")      ingestGapReport(dash, result.stderr, result.stdout);
   if (command === "#mathlib_coverage") ingestCoverage(dash, result.stderr, result.stdout);
 }
 
 function pickRenderer(command: string) {
   if (command === "#dep_graph") return renderDepGraph;
-  if (command === "#sorry_inventory_all") return renderSorryInventory;
+  if (command === "#sorry_inventory") return renderSorryInventory;
   if (command === "#gap_report") return renderGapReport;
   return (stderr: string, stdout: string) => renderRaw(command, stderr || stdout);
 }
@@ -153,18 +165,12 @@ function resolveProject(): { lakeRoot?: string; rootImport: string } {
   return { lakeRoot, rootImport: guessRootImport(lakeRoot) };
 }
 
-async function refreshDashboard(context: vscode.ExtensionContext) {
-  const { lakeRoot, rootImport } = resolveProject();
-  if (!lakeRoot) return;
-
-  const activePath = vscode.window.activeTextEditor?.document.uri.fsPath;
-  const activeModule = activePath ? pathToModule(lakeRoot, activePath) : undefined;
-  const extra = activeModule ? [activeModule] : [];
-  // Auto-refresh uses the cheap, current-file-only variant to stay fast.
-  const [inv, gap] = await Promise.all([
-    runScratch(lakeRoot, buildReportSource(rootImport, "#sorry_inventory", undefined, extra)),
-    runScratch(lakeRoot, buildReportSource(rootImport, "#gap_report",      undefined, extra)),
-  ]);
-  ingestSorryInventory(dash, inv.stderr, inv.stdout);
-  ingestGapReport(dash, gap.stderr, gap.stdout);
+async function refreshDashboard(_context: vscode.ExtensionContext) {
+  // Sorries: re-scan the active file directly (fast, reliable).
+  const doc = vscode.window.activeTextEditor?.document;
+  if (doc && doc.languageId === "lean4") {
+    dash.update({ sorries: scanFileForSorries(doc) });
+  }
+  // Gaps: skip auto-refresh (Meridian's #gap_report is too slow to run on every change).
+  // User can run "Meridian: Gap Report" explicitly.
 }

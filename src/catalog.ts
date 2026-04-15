@@ -61,8 +61,8 @@ export const CATALOG: CatalogEntry[] = [
   // ----- Report commands (run + render in webview) -----
   { id: "meridian.depGraph",        title: "#dep_graph",        doc: "Build project dependency graph (DOT) and render it.",
     insertion: { kind: "report", command: "#dep_graph" } },
-  { id: "meridian.sorryInventory",  title: "#sorry_inventory_all",  doc: "Sorry inventory across all imported user modules.",
-    insertion: { kind: "report", command: "#sorry_inventory_all" } },
+  { id: "meridian.sorryInventory",  title: "#sorry_inventory",  doc: "Sorry inventory for the current file.",
+    insertion: { kind: "report", command: "#sorry_inventory" } },
   { id: "meridian.gapReport",       title: "#gap_report",       doc: "Project-level Mathlib gap report.",
     insertion: { kind: "report", command: "#gap_report" } },
   { id: "meridian.mathlibCoverage", title: "#mathlib_coverage", doc: "Find near-miss Mathlib lemmas for a sorry.",
