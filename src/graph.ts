@@ -249,21 +249,23 @@ export function buildGraphForFile(
       const kind = classifyRef(r, rootImport);
       const l1Info = projectIdx.get(r);
       addNode({ id: r, label: r, kind, file: l1Info?.file, line: l1Info?.line });
-      addEdge(d.name, r);
+      // Upstream flow: the ref feeds into the decl.
+      addEdge(r, d.name);
 
       // Attach status to the level-1 node if it's a project decl we indexed.
       if (kind === "project" && l1Info) {
         nodes.get(r)!.status = l1Info.status;
       }
 
-      // Expand level 2 only for project refs.
+      // Expand level 2 only for project refs. Level-2 refs feed into the
+      // level-1 ref, so the arrow goes upstream (leftward) too.
       if (kind === "project" && l1Info) {
         const level2 = refsFromBody(l1Info.body).filter((r2) => r2 !== r);
         for (const r2 of level2) {
           const k2 = classifyRef(r2, rootImport);
           const l2Info = projectIdx.get(r2);
           addNode({ id: r2, label: r2, kind: k2, file: l2Info?.file, line: l2Info?.line, status: l2Info?.status });
-          addEdge(r, r2);
+          addEdge(r2, r);
         }
       }
     }
