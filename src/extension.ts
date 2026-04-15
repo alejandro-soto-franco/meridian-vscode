@@ -9,7 +9,7 @@ import {
   DashboardState, SorriesProvider, GapsProvider, CoverageProvider, CommandsProvider,
   ingestSorryInventory, ingestGapReport, ingestCoverage,
 } from "./tree";
-import { scanFileForSorries } from "./scanner";
+import { scanFileForSorries, scanFileForDecls } from "./scanner";
 
 const dash = new DashboardState();
 let output: vscode.OutputChannel;
@@ -115,7 +115,7 @@ async function runReport(context: vscode.ExtensionContext, title: string, comman
 
   let arg: string | undefined;
   if (command === "#mathlib_coverage") {
-    arg = await vscode.window.showInputBox({ prompt: "Sorry declaration name" });
+    arg = await pickQualifiedDecl();
     if (!arg) return;
   }
 
@@ -144,15 +144,40 @@ async function runReport(context: vscode.ExtensionContext, title: string, comman
 
   // Also feed the dashboard when relevant.
   if (command === "#sorry_inventory") ingestSorryInventory(dash, result.stderr, result.stdout);
-  if (command === "#gap_report")      ingestGapReport(dash, result.stderr, result.stdout);
+  if (command === "#gap_report_all")      ingestGapReport(dash, result.stderr, result.stdout);
   if (command === "#mathlib_coverage") ingestCoverage(dash, result.stderr, result.stdout);
 }
 
 function pickRenderer(command: string) {
   if (command === "#dep_graph") return renderDepGraph;
   if (command === "#sorry_inventory") return renderSorryInventory;
-  if (command === "#gap_report") return renderGapReport;
+  if (command === "#gap_report_all") return renderGapReport;
   return (stderr: string, stdout: string) => renderRaw(command, stderr || stdout);
+}
+
+async function pickQualifiedDecl(): Promise<string | undefined> {
+  const doc = vscode.window.activeTextEditor?.document;
+  const decls = doc && doc.languageId === "lean4" ? scanFileForDecls(doc) : [];
+  if (!decls.length) {
+    return vscode.window.showInputBox({
+      prompt: "Fully-qualified declaration name (e.g. Meridian.Domain.GMT.firstVariation_zero)",
+    });
+  }
+  const items: (vscode.QuickPickItem & { value: string })[] = decls.map((d) => ({
+    label: d.name,
+    description: `line ${d.line}`,
+    value: d.name,
+  }));
+  items.push({ label: "$(edit) Enter another name…", description: "Type a fully-qualified name", value: "__custom__" });
+  const pick = await vscode.window.showQuickPick(items, {
+    placeHolder: "Pick a declaration in the active file",
+    matchOnDescription: true,
+  });
+  if (!pick) return undefined;
+  if (pick.value === "__custom__") {
+    return vscode.window.showInputBox({ prompt: "Fully-qualified declaration name" });
+  }
+  return pick.value;
 }
 
 function resolveProject(): { lakeRoot?: string; rootImport: string } {

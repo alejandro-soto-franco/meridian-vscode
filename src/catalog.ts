@@ -63,8 +63,8 @@ export const CATALOG: CatalogEntry[] = [
     insertion: { kind: "report", command: "#dep_graph" } },
   { id: "meridian.sorryInventory",  title: "#sorry_inventory",  doc: "Sorry inventory for the current file.",
     insertion: { kind: "report", command: "#sorry_inventory" } },
-  { id: "meridian.gapReport",       title: "#gap_report",       doc: "Project-level Mathlib gap report.",
-    insertion: { kind: "report", command: "#gap_report" } },
+  { id: "meridian.gapReport",       title: "#gap_report_all",   doc: "Project-wide Mathlib gap report (scans all imported user modules).",
+    insertion: { kind: "report", command: "#gap_report_all" } },
   { id: "meridian.mathlibCoverage", title: "#mathlib_coverage", doc: "Find near-miss Mathlib lemmas for a sorry.",
     insertion: { kind: "report", command: "#mathlib_coverage" } },
 ];

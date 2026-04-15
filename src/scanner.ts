@@ -1,6 +1,35 @@
 import * as vscode from "vscode";
 import { SorryEntry } from "./parser";
 
+// Extract `namespace Foo` / `end Foo` blocks and top-level `theorem|lemma|def|...` declarations
+// from a Lean document, returning fully-qualified names with their line numbers.
+export function scanFileForDecls(doc: vscode.TextDocument): { name: string; line: number }[] {
+  const out: { name: string; line: number }[] = [];
+  const nsStack: string[] = [];
+  const re = /^\s*(?:@\[[^\]]*\]\s*)*(?:noncomputable\s+|private\s+|protected\s+|partial\s+|nonrec\s+|unsafe\s+)*(theorem|lemma|def|abbrev|instance|structure|inductive|class|opaque|axiom|example)\s+([A-Za-z_][\w.']*)/;
+  const nsRe = /^\s*namespace\s+([A-Za-z_][\w.']*)/;
+  const endRe = /^\s*end\s+([A-Za-z_][\w.']*)\s*$/;
+
+  for (let i = 0; i < doc.lineCount; i++) {
+    const line = doc.lineAt(i).text;
+    const ns = nsRe.exec(line);
+    if (ns) { nsStack.push(ns[1]!); continue; }
+    const e = endRe.exec(line);
+    if (e) {
+      const last = nsStack[nsStack.length - 1];
+      if (last && (last === e[1] || last.endsWith(`.${e[1]}`))) nsStack.pop();
+      continue;
+    }
+    const m = re.exec(line);
+    if (m) {
+      const local = m[2]!;
+      const fq = nsStack.length ? `${nsStack.join(".")}.${local}` : local;
+      out.push({ name: fq, line: i + 1 });
+    }
+  }
+  return out;
+}
+
 // Simple, reliable scan: every line containing `sorry` (as a word) that isn't a comment.
 // Captures `sorry`, `:= sorry`, `exact sorry`, `· sorry`, etc. Skips `--` line comments.
 export function scanFileForSorries(doc: vscode.TextDocument): SorryEntry[] {
