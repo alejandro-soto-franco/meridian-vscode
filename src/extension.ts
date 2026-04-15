@@ -10,7 +10,7 @@ import {
   ingestSorryInventory, ingestGapReport, ingestCoverage, ingestCoverageBlocks,
 } from "./tree";
 import { scanFileForSorries, scanFileForDecls } from "./scanner";
-import { listProjectSorries, runProjectCoverage } from "./coverage";
+import { listProjectSorries, runProjectCoverage, friendlyRaw } from "./coverage";
 
 const dash = new DashboardState();
 let output: vscode.OutputChannel;
@@ -146,7 +146,9 @@ async function runReport(context: vscode.ExtensionContext, title: string, comman
     ).then((c) => { if (c) output.show(); });
   }
 
-  const html = pickRenderer(command)(result.stderr, result.stdout);
+  const friendlyStderr = command === "#mathlib_coverage" ? friendlyRaw(result.stderr) : result.stderr;
+  const friendlyStdout = command === "#mathlib_coverage" ? friendlyRaw(result.stdout) : result.stdout;
+  const html = pickRenderer(command)(friendlyStderr, friendlyStdout);
   show(context, title, html);
 
   // Also feed the dashboard when relevant.

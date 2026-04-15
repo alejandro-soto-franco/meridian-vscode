@@ -75,6 +75,21 @@ export async function runProjectCoverage(
   return parseCoverageBatch(res.stderr + "\n" + res.stdout);
 }
 
+// Map Meridian's internal A/B/C categorisation to user-facing labels.
+export function friendlyCategory(cat: string): string {
+  switch (cat.trim().toUpperCase()) {
+    case "A": return "Available";
+    case "B": return "Partially Available";
+    case "C": return "Not Available";
+    default:  return cat;
+  }
+}
+
+// Rewrite raw Meridian output so "Category A/B/C" becomes the friendly label.
+export function friendlyRaw(text: string): string {
+  return text.replace(/Category\s+([ABC])\b/g, (_m, c) => friendlyCategory(c));
+}
+
 // Parse a batch run's output. Each `Coverage for <name>:` block becomes a CoverageBlock.
 export function parseCoverageBatch(text: string): CoverageBlock[] {
   const cleaned = stripLeanNoise(text);
@@ -82,7 +97,7 @@ export function parseCoverageBatch(text: string): CoverageBlock[] {
   const re = /Coverage for ([\w.']+):\s*Category\s+(\w+)/g;
   const starts: { decl: string; category: string; index: number }[] = [];
   for (const m of cleaned.matchAll(re)) {
-    starts.push({ decl: m[1]!, category: m[2]!, index: m.index! });
+    starts.push({ decl: m[1]!, category: friendlyCategory(m[2]!), index: m.index! });
   }
   for (let i = 0; i < starts.length; i++) {
     const s = starts[i]!;
@@ -104,7 +119,7 @@ export function parseCoverageBatch(text: string): CoverageBlock[] {
       category: s.category,
       exactMatches: exact,
       nearMisses: near,
-      raw: body,
+      raw: friendlyRaw(body),
     });
   }
   return blocks;
