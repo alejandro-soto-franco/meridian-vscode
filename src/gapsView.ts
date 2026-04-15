@@ -92,7 +92,7 @@ export class GapsPanel {
       adjacency[e.from]?.edges.push(edgeId);
       adjacency[e.to]?.edges.push(edgeId);
     }
-    this.panel.title = `Dependency Graph — ${filePath.split("/").pop()}`;
+    this.panel.title = `Dependency Graph: ${filePath.split("/").pop()}`;
     this.panel.webview.html = this.render(dot, nodeMeta, adjacency, nodeIds, edgeIds);
   }
 
