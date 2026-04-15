@@ -40,8 +40,9 @@ export interface RunResult {
 export async function runScratch(
   lakeRoot: string,
   leanSource: string,
-  timeoutMs = 180_000,
+  opts: { timeoutMs?: number; token?: vscode.CancellationToken } = {},
 ): Promise<RunResult> {
+  const timeoutMs = opts.timeoutMs ?? 600_000;
   const lake = vscode.workspace.getConfiguration("meridian").get<string>("lakeExecutable", "lake");
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "meridian-"));
   const tmpFile = path.join(tmpDir, "Scratch.lean");
@@ -53,16 +54,19 @@ export async function runScratch(
       env: process.env,
     });
     let stdout = "", stderr = "";
+    const cleanup = () => { try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {} };
     const timer = setTimeout(() => { try { child.kill("SIGKILL"); } catch {} }, timeoutMs);
+    const cancelSub = opts.token?.onCancellationRequested(() => {
+      try { child.kill("SIGKILL"); } catch {}
+    });
     child.stdout.on("data", (b) => (stdout += b.toString()));
     child.stderr.on("data", (b) => (stderr += b.toString()));
     child.on("error", (e) => {
-      clearTimeout(timer);
+      clearTimeout(timer); cancelSub?.dispose(); cleanup();
       resolve({ ok: false, stdout, stderr: stderr + "\n" + String(e), code: null });
     });
     child.on("close", (code) => {
-      clearTimeout(timer);
-      try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+      clearTimeout(timer); cancelSub?.dispose(); cleanup();
       resolve({ ok: code === 0, stdout, stderr, code });
     });
   });

@@ -111,8 +111,8 @@ async function runReport(context: vscode.ExtensionContext, title: string, comman
   const activeModule = activePath ? pathToModule(lakeRoot, activePath) : undefined;
   const src = buildReportSource(rootImport, command, arg, activeModule ? [activeModule] : []);
   const result = await vscode.window.withProgress(
-    { location: vscode.ProgressLocation.Notification, title: `Meridian: running ${command}`, cancellable: false },
-    () => runScratch(lakeRoot, src),
+    { location: vscode.ProgressLocation.Notification, title: `Meridian: running ${command} (cancellable)`, cancellable: true },
+    (_p, token) => runScratch(lakeRoot, src, { token }),
   );
 
   output.appendLine(`\n=== ${command} (lake root: ${lakeRoot}, import: ${rootImport}) ===`);
@@ -160,8 +160,9 @@ async function refreshDashboard(context: vscode.ExtensionContext) {
   const activePath = vscode.window.activeTextEditor?.document.uri.fsPath;
   const activeModule = activePath ? pathToModule(lakeRoot, activePath) : undefined;
   const extra = activeModule ? [activeModule] : [];
+  // Auto-refresh uses the cheap, current-file-only variant to stay fast.
   const [inv, gap] = await Promise.all([
-    runScratch(lakeRoot, buildReportSource(rootImport, "#sorry_inventory_all", undefined, extra)),
+    runScratch(lakeRoot, buildReportSource(rootImport, "#sorry_inventory", undefined, extra)),
     runScratch(lakeRoot, buildReportSource(rootImport, "#gap_report",      undefined, extra)),
   ]);
   ingestSorryInventory(dash, inv.stderr, inv.stdout);
