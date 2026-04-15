@@ -81,8 +81,14 @@ export class GapsPanel {
     const nodeMeta = Object.fromEntries(
       graph.nodes.map((n) => [n.id, { file: n.file ?? null, line: n.line ?? null, kind: n.kind, label: n.label }]),
     );
+    const adjacency: Record<string, string[]> = {};
+    for (const n of graph.nodes) adjacency[n.id] = [];
+    for (const e of graph.edges) {
+      (adjacency[e.from] ??= []).push(e.to);
+      (adjacency[e.to]   ??= []).push(e.from);
+    }
     this.panel.title = `Dependency Graph — ${filePath.split("/").pop()}`;
-    this.panel.webview.html = this.render(dot, nodeMeta);
+    this.panel.webview.html = this.render(dot, nodeMeta, adjacency);
   }
 
   private dispose(): void {
@@ -108,9 +114,11 @@ export class GapsPanel {
   private render(
     dot: string,
     nodeMeta: Record<string, { file: string | null; line: number | null; kind: string; label: string }>,
+    adjacency: Record<string, string[]>,
   ): string {
     const dotJson = JSON.stringify(dot);
     const metaJson = JSON.stringify(nodeMeta);
+    const adjJson = JSON.stringify(adjacency);
     return `<!doctype html><html><head><meta charset="utf-8">
     <link rel="stylesheet" href="https://fonts.cdnfonts.com/css/cmu-sans-serif">
     <style>
@@ -166,11 +174,15 @@ export class GapsPanel {
         font-size: 10px !important;
       }
       #stage svg path { stroke-linecap: round; stroke-linejoin: round; }
-      #stage g.node { cursor: pointer; }
+      #stage g.node { cursor: pointer; transition: opacity 150ms ease; }
       #stage g.node:hover { filter: drop-shadow(0 1px 4px rgba(76,154,255,.35)); }
-      #stage g.edge { cursor: pointer; }
+      #stage g.node.selected > *:first-child + * { stroke-width: 2.4 !important; }
+      #stage g.edge { cursor: pointer; transition: opacity 150ms ease; }
       #stage g.edge path { transition: stroke-opacity 120ms ease, stroke-width 120ms ease; }
       #stage g.edge:hover path { stroke-opacity: 1; stroke-width: 1.8; }
+      #stage.focused g.node:not(.in-focus) { opacity: 0.12; }
+      #stage.focused g.edge:not(.in-focus) { opacity: 0.08; }
+      #stage.focused g.edge.in-focus path { stroke-width: 1.8; stroke-opacity: 1; }
 
       #zoom {
         position: fixed;
@@ -242,6 +254,7 @@ export class GapsPanel {
       <script type="module">
         const vscode = acquireVsCodeApi();
         const meta = ${metaJson};
+        const adjacency = ${adjJson};
 
         // ---------------- zoom ----------------
         const stage = document.getElementById('stage');
@@ -286,17 +299,76 @@ export class GapsPanel {
           const svg = gv.dot(${dotJson});
           stage.innerHTML = svg;
 
+          // Build quick lookup from node id -> SVG group and edge "from->to" -> SVG group.
+          const nodeById = new Map();
+          const edgesByNode = new Map(); // nodeId -> Array<{el, other}>
           stage.querySelectorAll('g.node').forEach((g) => {
             const t = g.querySelector('title');
             if (!t) return;
             const id = t.textContent;
-            const info = meta[id];
-            if (info && info.file) {
-              g.addEventListener('click', (ev) => {
-                ev.stopPropagation();
-                vscode.postMessage({ type: 'openFile', file: info.file, line: info.line });
-              });
+            nodeById.set(id, g);
+            g.setAttribute('data-id', id);
+          });
+          stage.querySelectorAll('g.edge').forEach((g) => {
+            const t = g.querySelector('title');
+            if (!t) return;
+            const parts = t.textContent.split('->').map(s => s.trim());
+            if (parts.length !== 2) return;
+            const [from, to] = parts;
+            g.setAttribute('data-from', from);
+            g.setAttribute('data-to', to);
+            if (!edgesByNode.has(from)) edgesByNode.set(from, []);
+            if (!edgesByNode.has(to))   edgesByNode.set(to, []);
+            edgesByNode.get(from).push({ el: g, other: to, direction: 'out' });
+            edgesByNode.get(to).push({ el: g, other: from, direction: 'in' });
+          });
+
+          let selected = null;
+          const clearFocus = () => {
+            selected = null;
+            stage.classList.remove('focused');
+            stage.querySelectorAll('.in-focus').forEach((el) => el.classList.remove('in-focus'));
+            stage.querySelectorAll('.selected').forEach((el) => el.classList.remove('selected'));
+          };
+          const applyFocus = (id) => {
+            selected = id;
+            stage.classList.add('focused');
+            stage.querySelectorAll('.in-focus').forEach((el) => el.classList.remove('in-focus'));
+            stage.querySelectorAll('.selected').forEach((el) => el.classList.remove('selected'));
+            const rootNode = nodeById.get(id);
+            if (rootNode) { rootNode.classList.add('in-focus'); rootNode.classList.add('selected'); }
+            for (const nb of (adjacency[id] || [])) {
+              const nbEl = nodeById.get(nb);
+              if (nbEl) nbEl.classList.add('in-focus');
             }
+            for (const info of (edgesByNode.get(id) || [])) {
+              info.el.classList.add('in-focus');
+            }
+          };
+
+          stage.querySelectorAll('g.node').forEach((g) => {
+            const id = g.getAttribute('data-id');
+            if (!id) return;
+            let clickTimer = null;
+            g.addEventListener('click', (ev) => {
+              ev.stopPropagation();
+              // Defer so double-click can cancel.
+              if (clickTimer) return;
+              clickTimer = setTimeout(() => {
+                clickTimer = null;
+                if (selected === id) clearFocus();
+                else applyFocus(id);
+              }, 220);
+            });
+            g.addEventListener('dblclick', (ev) => {
+              ev.stopPropagation();
+              if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
+              const info = meta[id];
+              if (info && info.file) vscode.postMessage({ type: 'openFile', file: info.file, line: info.line });
+            });
+          });
+          document.getElementById('viewport').addEventListener('click', (ev) => {
+            if (ev.target === ev.currentTarget || ev.target === stage) clearFocus();
           });
 
           stage.querySelectorAll('g.edge').forEach((g) => {

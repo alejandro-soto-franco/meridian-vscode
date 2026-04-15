@@ -103,8 +103,8 @@
         },
         "meridian.coverageOnStartup": {
           "type": "boolean",
-          "default": false,
-          "description": "Run #mathlib_coverage across every sorry in the project on extension activation. First run is slow (builds a Mathlib DiscrTree)."
+          "default": true,
+          "description": "Run #mathlib_coverage across every sorry in the project on extension activation. First run is slow (builds a Mathlib DiscrTree) but subsequent runs reuse the cache within the same Lean process."
         },
         "meridian.depGraphOnStartup": {
           "type": "boolean",

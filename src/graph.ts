@@ -151,13 +151,15 @@ export function graphToDot(g: DepGraph): string {
   const esc = (s: string) => s.replace(/"/g, '\\"');
 
   // Palette: high-contrast on both light and dark VS Code backgrounds.
+  // Imports get a saturated gold treatment so they read clearly as the
+  // Mathlib surface flowing into the file.
   const PAL = {
     root:    { stroke: "#4c9aff", fill: "#4c9aff",  text: "#ffffff" },
     project: { stroke: "#8e9aaf", fill: "none",     text: "#4a5568" },
-    mathlib: { stroke: "#e5a13a", fill: "none",     text: "#8a5a1c" },
+    mathlib: { stroke: "#d4a017", fill: "none",     text: "#8a5a1c" },
     std:     { stroke: "#b48ead", fill: "none",     text: "#6b4a77" },
     unknown: { stroke: "#6c757d", fill: "none",     text: "#4a5568" },
-    import:  { stroke: "#e5a13a", fill: "#fff4e0",  text: "#8a5a1c" },
+    import:  { stroke: "#b8860b", fill: "#f4c430",  text: "#3a2900" },
   } as const;
 
   const style = (n: GraphNode): string => {
@@ -188,10 +190,21 @@ export function graphToDot(g: DepGraph): string {
     `  node [fontname="CMU Sans Serif", fontsize=10, penwidth=1.3];`,
     `  edge [color="#8e9aaf80", arrowsize=0.55, penwidth=0.9, arrowhead=vee];`,
   ];
-  for (const n of g.nodes) {
+  const imports = g.nodes.filter((n) => n.kind === "import");
+  const others  = g.nodes.filter((n) => n.kind !== "import");
+  for (const n of others) {
     lines.push(
       `  "${esc(n.id)}" [label="${esc(shortLabel(n.label))}", tooltip="${esc(n.id)}", ${style(n)}];`,
     );
+  }
+  if (imports.length) {
+    lines.push(`  subgraph cluster_imports { rank=source; style=invis;`);
+    for (const n of imports) {
+      lines.push(
+        `    "${esc(n.id)}" [label="${esc(shortLabel(n.label))}", tooltip="${esc(n.id)}", ${style(n)}];`,
+      );
+    }
+    lines.push(`  }`);
   }
   for (const e of g.edges) {
     lines.push(`  "${esc(e.from)}" -> "${esc(e.to)}";`);
