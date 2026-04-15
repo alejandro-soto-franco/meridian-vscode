@@ -15,11 +15,37 @@ import { listProjectSorries, runProjectCoverage, friendlyRaw } from "./coverage"
 
 const dash = new DashboardState();
 let output: vscode.OutputChannel;
+// File mirror of the Meridian output channel. Same content as the channel
+// but persisted at a stable path so external agents (and the user's grep)
+// can read it without needing VS Code open.
+const LOG_FILE = require("path").join(require("os").homedir(), ".meridian-vscode.log");
+
+function log(line: string) {
+  output.appendLine(line);
+  try { require("fs").appendFileSync(LOG_FILE, line + "\n"); } catch {}
+}
 
 export function activate(context: vscode.ExtensionContext) {
   output = vscode.window.createOutputChannel("Meridian");
   context.subscriptions.push(output);
-  output.appendLine(`Meridian extension activated at ${new Date().toISOString()}`);
+  // Mirror every appendLine to the log file so `output.appendLine(...)` calls
+  // scattered elsewhere in the extension also land in the mirror.
+  const origAppend = output.appendLine.bind(output);
+  (output as any).appendLine = (s: string) => {
+    origAppend(s);
+    try { require("fs").appendFileSync(LOG_FILE, s + "\n"); } catch {}
+  };
+  try { require("fs").writeFileSync(LOG_FILE, ""); } catch {}
+  log(`Meridian extension activated at ${new Date().toISOString()}`);
+  log(`log file mirror: ${LOG_FILE}`);
+  const { lakeRoot, rootImport } = resolveProject();
+  if (lakeRoot) {
+    log(`lake root: ${lakeRoot}`);
+    log(`root import: ${rootImport}`);
+    log(`Meridian dependency detected: ${projectHasMeridian(lakeRoot)}`);
+  } else {
+    log(`no Lake project detected from current workspace`);
+  }
   // Sidebar views.
   const sorries = new SorriesProvider(dash);
   const coverage = new CoverageProvider(dash);
