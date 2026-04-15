@@ -180,18 +180,40 @@ export function buildGraphForFile(
     break;
   }
 
-  // Add import nodes feeding into every decl in the file.
-  // Mathlib imports keep the gold `import` kind. Project-local imports flow
-  // in as `project` kind with an aggregated module status so they get
-  // coloured complete / partial / stub just like decl nodes would be.
+  // Build a per-import "export set" so we can detect actual dependencies
+  // decl-by-decl instead of wiring every import to every decl.
+  //
+  // For project-local imports we know every decl in the module's namespace
+  // via projectIdx — that gives us both fully-qualified and short names.
+  //
+  // For Mathlib / Std / third-party imports we can't enumerate exports, so
+  // we match any qualified reference that starts with the import name.
+  // Bare/unqualified uses (after `open Foo`) go undetected, which is the
+  // right trade-off: we'd rather drop a real edge than fabricate a spurious
+  // one.
+  type ImportMatcher = (refs: string[]) => boolean;
+  const matchers = new Map<string, ImportMatcher>();
   for (const imp of fileImports) {
-    if (imp === "Mathlib" || imp.startsWith("Mathlib.")) {
-      addNode({ id: `import:${imp}`, label: imp, kind: "import" });
+    if (imp === "Mathlib" || imp.startsWith("Mathlib.") ||
+        imp.startsWith("Std.") || imp.startsWith("Lean.") || imp.startsWith("Init.")) {
+      matchers.set(imp, (refs) => refs.some((r) => r === imp || r.startsWith(imp + ".")));
     } else {
-      const status = aggregateModuleStatus(imp, projectIdx);
-      addNode({ id: `import:${imp}`, label: imp, kind: "project", status });
+      const exported = new Set<string>();
+      for (const [name] of projectIdx) {
+        if (name === imp || name.startsWith(imp + ".")) {
+          exported.add(name);
+          const last = name.split(".").pop();
+          if (last) exported.add(last);
+        }
+      }
+      matchers.set(imp, (refs) => refs.some((r) => exported.has(r) || r.startsWith(imp + ".")));
     }
   }
+
+  // We'll add import nodes lazily — only once we know at least one decl in
+  // the file actually depends on them.
+  const usedImports = new Set<string>();
+  const importEdges: { from: string; to: string }[] = [];
 
   for (let i = 0; i < rootDecls.length; i++) {
     const d = rootDecls[i]!;
@@ -199,9 +221,16 @@ export function buildGraphForFile(
     const body = lines.slice(d.line - 1, end).join("\n");
     const status = classifyBody(body);
     addNode({ id: d.name, label: d.name, kind: "root", file: leanFile, line: d.line, status });
-    for (const imp of fileImports) addEdge(`import:${imp}`, d.name);
 
     const level1 = refsFromBody(body).filter((r) => r !== d.name);
+
+    // Connect only the imports this decl actually references.
+    for (const imp of fileImports) {
+      if (matchers.get(imp)!(level1)) {
+        usedImports.add(imp);
+        importEdges.push({ from: `import:${imp}`, to: d.name });
+      }
+    }
     for (const r of level1) {
       const kind = classifyRef(r, rootImport);
       const l1Info = projectIdx.get(r);
@@ -223,6 +252,21 @@ export function buildGraphForFile(
           addEdge(r, r2);
         }
       }
+    }
+  }
+
+  // Materialise only the imports that something in the file actually used.
+  for (const imp of usedImports) {
+    if (imp === "Mathlib" || imp.startsWith("Mathlib.")) {
+      addNode({ id: `import:${imp}`, label: imp, kind: "import" });
+    } else {
+      const status = aggregateModuleStatus(imp, projectIdx);
+      addNode({ id: `import:${imp}`, label: imp, kind: "project", status });
+    }
+  }
+  for (const e of importEdges) {
+    if (usedImports.has(e.from.replace(/^import:/, ""))) {
+      addEdge(e.from, e.to);
     }
   }
 
