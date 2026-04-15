@@ -389,21 +389,35 @@ export function buildGraphForFile(
     }
   }
 
+  // Resolve a package-backed import to its source .lean on disk so click
+  // opens the actual Mathlib / Batteries file (a "LibView" jump).
+  const importSourceFile = (imp: string): string | undefined => {
+    const rel = imp.replace(/\./g, "/") + ".lean";
+    const isMathlib = imp === "Mathlib" || imp.startsWith("Mathlib.");
+    const isStd     = imp.startsWith("Std.") || imp.startsWith("Batteries.");
+    const candidates: string[] = [];
+    if (isMathlib) candidates.push(path.join(lakeRoot, ".lake", "packages", "mathlib", rel));
+    if (isStd)     candidates.push(path.join(lakeRoot, ".lake", "packages", "batteries", rel));
+    for (const p of candidates) if (fs.existsSync(p)) return p;
+    return undefined;
+  };
+
   // Direct imports: Mathlib imports always show, project imports only when used.
   for (const imp of fileImports) {
     const isMathlib = imp === "Mathlib" || imp.startsWith("Mathlib.");
     if (isMathlib) {
-      addNode({ id: `import:${imp}`, label: imp, kind: "import" });
+      addNode({ id: `import:${imp}`, label: imp, kind: "import", file: importSourceFile(imp) });
     } else if (usedImports.has(imp)) {
       const status = aggregateModuleStatus(imp, projectIdx);
-      addNode({ id: `import:${imp}`, label: imp, kind: "project", status });
+      // Project import: its source file is the matching .lean inside the project.
+      const projFile = path.join(lakeRoot, imp.replace(/\./g, "/") + ".lean");
+      addNode({ id: `import:${imp}`, label: imp, kind: "project", status, file: fs.existsSync(projFile) ? projFile : undefined });
     }
   }
-  // Transitive Mathlib modules: a symbol used here was found in a Mathlib
-  // file that this file doesn't directly import. Surface the actual source
-  // file so the wiring is correct and the user can see where it came from.
+  // Transitive Mathlib modules: the symbol was declared in a Mathlib file this
+  // file doesn't directly import. Show as a gold node, wired up, opens the file.
   for (const m of transitiveMathlibImports) {
-    addNode({ id: `import:${m}`, label: m, kind: "import" });
+    addNode({ id: `import:${m}`, label: m, kind: "import", file: importSourceFile(m) });
   }
   for (const e of importEdges) {
     addEdge(e.from, e.to);

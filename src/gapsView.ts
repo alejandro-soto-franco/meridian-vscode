@@ -366,9 +366,16 @@ export class GapsPanel {
           };
 
           for (const [nodeId, g] of nodeById) {
+            const info = meta[nodeId];
+            const isImport = info && info.kind === 'import';
             let clickTimer = null;
             g.addEventListener('click', (ev) => {
               ev.stopPropagation();
+              // Import nodes open their source file on single click (LibView).
+              if (isImport && info.file) {
+                vscode.postMessage({ type: 'openFile', file: info.file, line: info.line });
+                return;
+              }
               if (clickTimer) return;
               clickTimer = setTimeout(() => {
                 clickTimer = null;
@@ -379,7 +386,6 @@ export class GapsPanel {
             g.addEventListener('dblclick', (ev) => {
               ev.stopPropagation();
               if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
-              const info = meta[nodeId];
               if (info && info.file) vscode.postMessage({ type: 'openFile', file: info.file, line: info.line });
             });
           }
