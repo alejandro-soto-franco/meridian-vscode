@@ -71,7 +71,7 @@
     "views": {
       "meridian": [
         { "id": "meridian.sorries",  "name": "Sorries"          },
-        { "id": "meridian.gaps",     "name": "Mathlib Gaps"     },
+        { "id": "meridian.gaps",     "name": "Mathlib Gaps",     "type": "webview" },
         { "id": "meridian.coverage", "name": "Coverage"         },
         { "id": "meridian.commands", "name": "Commands"         }
       ]

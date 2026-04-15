@@ -6,9 +6,10 @@ import {
   renderDepGraph, renderSorryInventory, renderGapReport, renderRaw, show,
 } from "./webview";
 import {
-  DashboardState, SorriesProvider, GapsProvider, CoverageProvider, CommandsProvider,
+  DashboardState, SorriesProvider, CoverageProvider, CommandsProvider,
   ingestSorryInventory, ingestGapReport, ingestCoverage, ingestCoverageBlocks,
 } from "./tree";
+import { GapsWebviewProvider } from "./gapsView";
 import { scanFileForSorries, scanFileForDecls } from "./scanner";
 import { listProjectSorries, runProjectCoverage, friendlyRaw } from "./coverage";
 
@@ -21,14 +22,14 @@ export function activate(context: vscode.ExtensionContext) {
   output.appendLine(`Meridian extension activated at ${new Date().toISOString()}`);
   // Sidebar views.
   const sorries = new SorriesProvider(dash);
-  const gaps = new GapsProvider(dash);
   const coverage = new CoverageProvider(dash);
   const commandsView = new CommandsProvider();
+  const gapsView = new GapsWebviewProvider(context, resolveProject);
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider("meridian.sorries", sorries),
-    vscode.window.registerTreeDataProvider("meridian.gaps", gaps),
     vscode.window.registerTreeDataProvider("meridian.coverage", coverage),
     vscode.window.registerTreeDataProvider("meridian.commands", commandsView),
+    vscode.window.registerWebviewViewProvider(GapsWebviewProvider.viewType, gapsView),
   );
 
   // Register every catalog command.
@@ -56,9 +57,10 @@ export function activate(context: vscode.ExtensionContext) {
     const doc = vscode.window.activeTextEditor?.document;
     if (!doc || doc.languageId !== "lean4") {
       dash.update({ sorries: [] });
-      return;
+    } else {
+      dash.update({ sorries: scanFileForSorries(doc) });
     }
-    dash.update({ sorries: scanFileForSorries(doc) });
+    gapsView.refresh();
   };
   context.subscriptions.push(
     vscode.window.onDidChangeActiveTextEditor(refreshSorriesForActive),
