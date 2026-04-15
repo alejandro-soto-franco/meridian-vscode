@@ -247,13 +247,11 @@ export function graphToDot(g: DepGraph): string {
   const esc = (s: string) => s.replace(/"/g, '\\"');
 
   // Status palette: drives project + root decl colors, and also non-Mathlib
-  // imports (whose status is aggregated from their module's decls). Fills
-  // are near-white tints so text stays high-contrast against VS Code's dark
-  // editor background.
+  // imports (whose status is aggregated from their module's decls).
   const STATUS = {
-    complete: { stroke: "#2f855a", fill: "#f0fdf4", text: "#1a3c20" },
-    partial:  { stroke: "#b7791f", fill: "#fffbeb", text: "#5a3500" },
-    stub:     { stroke: "#c53030", fill: "#7f1d1d", text: "#ffffff" },
+    complete: { stroke: "#15803d", fill: "#86efac", text: "#14532d" },
+    partial:  { stroke: "#b45309", fill: "#fcd34d", text: "#78350f" },
+    stub:     { stroke: "#b91c1c", fill: "#7f1d1d", text: "#ffffff" },
   } as const;
 
   // Kind-keyed defaults for everything else. All fills are near-white so
@@ -308,23 +306,44 @@ export function graphToDot(g: DepGraph): string {
   ];
   const imports = g.nodes.filter((n) => n.kind === "import");
   const others  = g.nodes.filter((n) => n.kind !== "import");
+  const nodeIdFor = (i: number) => `n${i}`;
+  const nodeIndex = new Map<string, number>();
+  g.nodes.forEach((n, i) => nodeIndex.set(n.id, i));
+
+  const emit = (n: GraphNode) => {
+    const idx = nodeIndex.get(n.id)!;
+    return `"${esc(n.id)}" [id="${nodeIdFor(idx)}", label="${plainLabel(n.label)}", tooltip="${esc(n.id)}", ${style(n)}];`;
+  };
+
   for (const n of others) {
-    lines.push(
-      `  "${esc(n.id)}" [label="${plainLabel(n.label)}", tooltip="${esc(n.id)}", ${style(n)}];`,
-    );
+    lines.push(`  ${emit(n)}`);
   }
   if (imports.length) {
     lines.push(`  subgraph cluster_imports { rank=source; style=invis;`);
-    for (const n of imports) {
-      lines.push(
-        `    "${esc(n.id)}" [label="${plainLabel(n.label)}", tooltip="${esc(n.id)}", ${style(n)}];`,
-      );
-    }
+    for (const n of imports) lines.push(`    ${emit(n)}`);
     lines.push(`  }`);
   }
-  for (const e of g.edges) {
-    lines.push(`  "${esc(e.from)}" -> "${esc(e.to)}";`);
+  for (let i = 0; i < g.edges.length; i++) {
+    const e = g.edges[i]!;
+    // Explicit id so the SVG carries a stable, parseable identifier per edge.
+    lines.push(`  "${esc(e.from)}" -> "${esc(e.to)}" [id="e${i}"];`);
   }
   lines.push("}");
   return lines.join("\n");
+}
+
+// Parallel mappings so the webview can wire up focus / click handlers
+// without parsing fragile SVG title text.
+export function edgeIdMap(g: DepGraph): Record<string, { from: string; to: string }> {
+  const m: Record<string, { from: string; to: string }> = {};
+  for (let i = 0; i < g.edges.length; i++) {
+    const e = g.edges[i]!;
+    m[`e${i}`] = { from: e.from, to: e.to };
+  }
+  return m;
+}
+export function nodeIdMap(g: DepGraph): Record<string, string> {
+  const m: Record<string, string> = {};
+  g.nodes.forEach((n, i) => { m[n.id] = `n${i}`; });
+  return m;
 }

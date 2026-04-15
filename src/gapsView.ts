@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { buildGraphForFile, graphToDot } from "./graph";
+import { buildGraphForFile, graphToDot, edgeIdMap, nodeIdMap } from "./graph";
 
 // Standalone editor panel rendering the dependency graph for the most recently
 // focused Lean file. Behaves like LeanInfoView: lives beside the editor, stays
@@ -81,14 +81,19 @@ export class GapsPanel {
     const nodeMeta = Object.fromEntries(
       graph.nodes.map((n) => [n.id, { file: n.file ?? null, line: n.line ?? null, kind: n.kind, label: n.label }]),
     );
-    const adjacency: Record<string, string[]> = {};
-    for (const n of graph.nodes) adjacency[n.id] = [];
-    for (const e of graph.edges) {
-      (adjacency[e.from] ??= []).push(e.to);
-      (adjacency[e.to]   ??= []).push(e.from);
+    const nodeIds = nodeIdMap(graph);
+    const edgeIds = edgeIdMap(graph);
+    // adjacency: nodeId -> { neighbours: nodeId[], edges: svgEdgeId[] }
+    const adjacency: Record<string, { neighbours: string[]; edges: string[] }> = {};
+    for (const n of graph.nodes) adjacency[n.id] = { neighbours: [], edges: [] };
+    for (const [edgeId, e] of Object.entries(edgeIds)) {
+      adjacency[e.from]?.neighbours.push(e.to);
+      adjacency[e.to]?.neighbours.push(e.from);
+      adjacency[e.from]?.edges.push(edgeId);
+      adjacency[e.to]?.edges.push(edgeId);
     }
     this.panel.title = `Dependency Graph — ${filePath.split("/").pop()}`;
-    this.panel.webview.html = this.render(dot, nodeMeta, adjacency);
+    this.panel.webview.html = this.render(dot, nodeMeta, adjacency, nodeIds, edgeIds);
   }
 
   private dispose(): void {
@@ -115,11 +120,15 @@ export class GapsPanel {
   private render(
     dot: string,
     nodeMeta: Record<string, { file: string | null; line: number | null; kind: string; label: string }>,
-    adjacency: Record<string, string[]>,
+    adjacency: Record<string, { neighbours: string[]; edges: string[] }>,
+    nodeIds: Record<string, string>,
+    edgeIds: Record<string, { from: string; to: string }>,
   ): string {
     const dotJson = JSON.stringify(dot);
     const metaJson = JSON.stringify(nodeMeta);
     const adjJson = JSON.stringify(adjacency);
+    const nodeIdsJson = JSON.stringify(nodeIds);
+    const edgeIdsJson = JSON.stringify(edgeIds);
     return `<!doctype html><html><head><meta charset="utf-8">
     <link rel="stylesheet" href="https://fonts.cdnfonts.com/css/cmu-sans-serif">
     <style>
@@ -272,6 +281,8 @@ export class GapsPanel {
         const vscode = acquireVsCodeApi();
         const meta = ${metaJson};
         const adjacency = ${adjJson};
+        const nodeIds = ${nodeIdsJson};
+        const edgeIds = ${edgeIdsJson};
 
         // ---------------- zoom ----------------
         const stage = document.getElementById('stage');
@@ -316,29 +327,18 @@ export class GapsPanel {
           const svg = gv.dot(${dotJson});
           stage.innerHTML = svg;
 
-          // Build quick lookup from node id -> SVG group and edge "from->to" -> SVG group.
+          // Look up SVG elements by the explicit id= attributes we embedded
+          // in DOT. Much more reliable than parsing title text.
           const nodeById = new Map();
-          const edgesByNode = new Map(); // nodeId -> Array<{el, other}>
-          stage.querySelectorAll('g.node').forEach((g) => {
-            const t = g.querySelector('title');
-            if (!t) return;
-            const id = t.textContent;
-            nodeById.set(id, g);
-            g.setAttribute('data-id', id);
-          });
-          stage.querySelectorAll('g.edge').forEach((g) => {
-            const t = g.querySelector('title');
-            if (!t) return;
-            const parts = t.textContent.split('->').map(s => s.trim());
-            if (parts.length !== 2) return;
-            const [from, to] = parts;
-            g.setAttribute('data-from', from);
-            g.setAttribute('data-to', to);
-            if (!edgesByNode.has(from)) edgesByNode.set(from, []);
-            if (!edgesByNode.has(to))   edgesByNode.set(to, []);
-            edgesByNode.get(from).push({ el: g, other: to, direction: 'out' });
-            edgesByNode.get(to).push({ el: g, other: from, direction: 'in' });
-          });
+          const edgeById = new Map();
+          for (const [nodeId, svgId] of Object.entries(nodeIds)) {
+            const el = stage.querySelector('#' + svgId);
+            if (el) { nodeById.set(nodeId, el); el.setAttribute('data-node-id', nodeId); }
+          }
+          for (const svgEdgeId of Object.keys(edgeIds)) {
+            const el = stage.querySelector('#' + svgEdgeId);
+            if (el) edgeById.set(svgEdgeId, el);
+          }
 
           let selected = null;
           const clearFocus = () => {
@@ -354,47 +354,43 @@ export class GapsPanel {
             stage.querySelectorAll('.selected').forEach((el) => el.classList.remove('selected'));
             const rootNode = nodeById.get(id);
             if (rootNode) { rootNode.classList.add('in-focus'); rootNode.classList.add('selected'); }
-            for (const nb of (adjacency[id] || [])) {
+            const adj = adjacency[id] || { neighbours: [], edges: [] };
+            for (const nb of adj.neighbours) {
               const nbEl = nodeById.get(nb);
               if (nbEl) nbEl.classList.add('in-focus');
             }
-            for (const info of (edgesByNode.get(id) || [])) {
-              info.el.classList.add('in-focus');
+            for (const svgEdgeId of adj.edges) {
+              const edgeEl = edgeById.get(svgEdgeId);
+              if (edgeEl) edgeEl.classList.add('in-focus');
             }
           };
 
-          stage.querySelectorAll('g.node').forEach((g) => {
-            const id = g.getAttribute('data-id');
-            if (!id) return;
+          for (const [nodeId, g] of nodeById) {
             let clickTimer = null;
             g.addEventListener('click', (ev) => {
               ev.stopPropagation();
-              // Defer so double-click can cancel.
               if (clickTimer) return;
               clickTimer = setTimeout(() => {
                 clickTimer = null;
-                if (selected === id) clearFocus();
-                else applyFocus(id);
+                if (selected === nodeId) clearFocus();
+                else applyFocus(nodeId);
               }, 220);
             });
             g.addEventListener('dblclick', (ev) => {
               ev.stopPropagation();
               if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
-              const info = meta[id];
+              const info = meta[nodeId];
               if (info && info.file) vscode.postMessage({ type: 'openFile', file: info.file, line: info.line });
             });
-          });
+          }
           // Any click that wasn't stopped by a node/edge handler lands here and
           // clears focus — whitespace, SVG background, cluster chrome, etc.
           document.getElementById('viewport').addEventListener('click', () => clearFocus());
 
-          stage.querySelectorAll('g.edge').forEach((g) => {
-            const t = g.querySelector('title');
-            if (!t) return;
-            // Graphviz title format for directed edges: "from->to"
-            const parts = t.textContent.split('->').map(s => s.trim());
-            if (parts.length !== 2) return;
-            const [from, to] = parts;
+          for (const [svgEdgeId, g] of edgeById) {
+            const e = edgeIds[svgEdgeId];
+            if (!e) continue;
+            const { from, to } = e;
             g.addEventListener('click', (ev) => {
               ev.stopPropagation();
               fromEl.textContent = (meta[from] && meta[from].label) || from;
@@ -410,7 +406,7 @@ export class GapsPanel {
               };
               infoEl.style.display = 'block';
             });
-          });
+          }
         } catch (e) {
           stage.innerHTML = '<div style="padding:1rem;color:var(--muted)">Graphviz failed to load: ' + e + '</div>';
         }
