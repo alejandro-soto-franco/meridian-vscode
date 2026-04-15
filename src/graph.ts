@@ -102,6 +102,29 @@ export function indexProjectDecls(lakeRoot: string, rootImport: string): Map<str
   return idx;
 }
 
+// Aggregate decl-level statuses to a module-level status.
+// all complete → complete; all stub → stub; mixed or any partial → partial.
+export function aggregateModuleStatus(
+  module: string,
+  idx: Map<string, DeclIndexEntry>,
+): DeclStatus | undefined {
+  let sawComplete = false, sawPartial = false, sawStub = false, any = false;
+  for (const [name, entry] of idx) {
+    // Match decls whose qualified name lives in this module's namespace.
+    if (name === module || name.startsWith(module + ".")) {
+      any = true;
+      if (entry.status === "complete") sawComplete = true;
+      else if (entry.status === "partial") sawPartial = true;
+      else if (entry.status === "stub") sawStub = true;
+    }
+  }
+  if (!any) return undefined;
+  if (sawPartial) return "partial";
+  if (sawStub && sawComplete) return "partial";
+  if (sawStub) return "stub";
+  return "complete";
+}
+
 export function refsFromBody(body: string): string[] {
   const out = new Set<string>();
   for (const m of body.matchAll(QUAL_IDENT)) {
@@ -158,11 +181,16 @@ export function buildGraphForFile(
   }
 
   // Add import nodes feeding into every decl in the file.
-  // Mathlib imports keep the gold `import` kind; everything else flows in as
-  // a neutral `project`-style import so it doesn't compete visually.
+  // Mathlib imports keep the gold `import` kind. Project-local imports flow
+  // in as `project` kind with an aggregated module status so they get
+  // coloured complete / partial / stub just like decl nodes would be.
   for (const imp of fileImports) {
-    const kind: GraphNode["kind"] = imp === "Mathlib" || imp.startsWith("Mathlib.") ? "import" : "project";
-    addNode({ id: `import:${imp}`, label: imp, kind });
+    if (imp === "Mathlib" || imp.startsWith("Mathlib.")) {
+      addNode({ id: `import:${imp}`, label: imp, kind: "import" });
+    } else {
+      const status = aggregateModuleStatus(imp, projectIdx);
+      addNode({ id: `import:${imp}`, label: imp, kind: "project", status });
+    }
   }
 
   for (let i = 0; i < rootDecls.length; i++) {
@@ -218,27 +246,31 @@ function plainLabel(name: string): string {
 export function graphToDot(g: DepGraph): string {
   const esc = (s: string) => s.replace(/"/g, '\\"');
 
-  // Status palette: these drive project + root decl colors.
-  // complete → green, partial → yellow, stub → dark red with white text.
+  // Status palette: drives project + root decl colors, and also non-Mathlib
+  // imports (whose status is aggregated from their module's decls). Fills
+  // are near-white tints so text stays high-contrast against VS Code's dark
+  // editor background.
   const STATUS = {
-    complete: { stroke: "#2f855a", fill: "#c6f6d5", text: "#22543d" },
-    partial:  { stroke: "#b7791f", fill: "#fef3c7", text: "#744210" },
-    stub:     { stroke: "#9b2c2c", fill: "#742a2a", text: "#ffffff" },
+    complete: { stroke: "#2f855a", fill: "#f0fdf4", text: "#1a3c20" },
+    partial:  { stroke: "#b7791f", fill: "#fffbeb", text: "#5a3500" },
+    stub:     { stroke: "#c53030", fill: "#7f1d1d", text: "#ffffff" },
   } as const;
 
-  // Kind-keyed defaults for everything else.
+  // Kind-keyed defaults for everything else. All fills are near-white so
+  // the labels stay readable on a dark theme.
   const PAL = {
     root:    { stroke: "#4c9aff", fill: "#4c9aff",  text: "#ffffff" },
-    project: { stroke: "#8e9aaf", fill: "#eceff4",  text: "#2e3440" },
+    project: { stroke: "#8e9aaf", fill: "#ffffff",  text: "#2e3440" },
     mathlib: { stroke: "#4a5568", fill: "#cbd5e0",  text: "#000000" },
-    std:     { stroke: "#b48ead", fill: "none",     text: "#6b4a77" },
-    unknown: { stroke: "#6c757d", fill: "none",     text: "#4a5568" },
+    std:     { stroke: "#b48ead", fill: "#ffffff",  text: "#6b4a77" },
+    unknown: { stroke: "#6c757d", fill: "#ffffff",  text: "#2d3748" },
     import:  { stroke: "#b8860b", fill: "#f4c430",  text: "#3a2900" },
   } as const;
 
   const style = (n: GraphNode): string => {
     const base = PAL[n.kind];
-    // Status coloring wins for project/root decls when we have a classification.
+    // Status coloring wins for project/root decls AND for project-kind
+    // imports with an aggregated module status.
     const p = (n.kind === "project" || n.kind === "root") && n.status
       ? STATUS[n.status]
       : base;

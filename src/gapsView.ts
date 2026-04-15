@@ -152,11 +152,11 @@ export class GapsPanel {
       }
       #legend span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
       #legend i { width: 12px; height: 8px; border-radius: 2px; display: inline-block; box-sizing: border-box; }
-      #legend .complete { background: #c6f6d5; border: 1.3px solid #2f855a; }
-      #legend .partial  { background: #fef3c7; border: 1.3px solid #b7791f; }
-      #legend .stub     { background: #742a2a; border: 1.3px solid #9b2c2c; }
+      #legend .complete { background: #f0fdf4; border: 1.3px solid #2f855a; }
+      #legend .partial  { background: #fffbeb; border: 1.3px solid #b7791f; }
+      #legend .stub     { background: #7f1d1d; border: 1.3px solid #c53030; }
       #legend .mathlib  { background: #cbd5e0; border: 1.3px solid #4a5568; }
-      #legend .std      { border: 1.3px solid #b48ead; }
+      #legend .std      { background: #ffffff; border: 1.3px solid #b48ead; }
       #legend .import   { background: #f4c430; border: 1.3px solid #b8860b; }
 
       #viewport {
@@ -188,9 +188,17 @@ export class GapsPanel {
       #stage g.edge { cursor: pointer; transition: opacity 150ms ease; }
       #stage g.edge path { transition: stroke-opacity 120ms ease, stroke-width 120ms ease; }
       #stage g.edge:hover path { stroke-opacity: 1; stroke-width: 1.8; }
-      #stage.focused g.node:not(.in-focus) { opacity: 0.12; }
-      #stage.focused g.edge:not(.in-focus) { opacity: 0.08; }
-      #stage.focused g.edge.in-focus path { stroke-width: 1.8; stroke-opacity: 1; }
+      #stage.focused g.node:not(.in-focus) { opacity: 0.18; }
+      #stage.focused g.edge:not(.in-focus) { opacity: 0.22; }
+      #stage.focused g.edge.in-focus path {
+        stroke: #4c9aff !important;
+        stroke-width: 2 !important;
+        stroke-opacity: 1 !important;
+      }
+      #stage.focused g.edge.in-focus polygon {
+        fill: #4c9aff !important;
+        stroke: #4c9aff !important;
+      }
 
       #zoom {
         position: fixed;
