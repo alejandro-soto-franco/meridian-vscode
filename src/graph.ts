@@ -269,7 +269,7 @@ export function graphToDot(g: DepGraph): string {
     // and close enough in glyph width to Latin Modern Mono that the boxes
     // end up a bit wider than strictly needed, which is what we want.
     `  node [fontname="Courier", fontsize=10, penwidth=1.3];`,
-    `  edge [color="#8e9aaf80", arrowsize=0.55, penwidth=0.9, arrowhead=vee];`,
+    `  edge [color="#8e9aaf80", arrowsize=0.55, penwidth=0.9, arrowhead=vee, tailport=e, headport=w];`,
   ];
   const imports = g.nodes.filter((n) => n.kind === "import");
   const others  = g.nodes.filter((n) => n.kind !== "import");
