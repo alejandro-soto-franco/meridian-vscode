@@ -335,30 +335,67 @@ export class GapsPanel {
         document.getElementById('zoomIn').onclick  = () => { scale = Math.min(scale * 1.2, 4); applyScale(); };
         document.getElementById('zoomOut').onclick = () => { scale = Math.max(scale / 1.2, 0.25); applyScale(); };
         document.getElementById('zoomReset').onclick = () => { scale = 1; applyScale(); };
-        // ---------------- pan (drag blank space) ----------------
+        // ---------------- pan + blank-click handling ----------------
+        // Rule: a pointer-down on blank canvas starts a potential pan. On
+        // mouseup, if we moved > DRAG_PX, it was a pan — leave focus alone.
+        // If it was a click (no real movement), check whether we clicked
+        // close enough to any currently-focused edge (PROXIMITY_PX) — if
+        // yes, keep focus; the user was aiming at an edge and missed. Only
+        // a true click in empty space clears focus.
         const viewport = document.getElementById('viewport');
-        let panning = false, panStartX = 0, panStartY = 0, panStartScrollL = 0, panStartScrollT = 0;
+        const DRAG_PX = 4;
+        const PROXIMITY_PX = 16;
+        let panning = false, moved = false;
+        let panStartX = 0, panStartY = 0, panStartScrollL = 0, panStartScrollT = 0;
+
+        const chromeAt = (t) =>
+          t && t.closest && (
+            t.closest('g.node') || t.closest('g.edge') ||
+            t.closest('#zoom') || t.closest('#legend') || t.closest('#edgeInfo')
+          );
+
+        const nearFocusedEdge = (cx, cy) => {
+          // Sample a small cross of points around the click and ask the
+          // browser if any element at that point is an in-focus edge.
+          const offsets = [[0,0],[PROXIMITY_PX,0],[-PROXIMITY_PX,0],[0,PROXIMITY_PX],[0,-PROXIMITY_PX]];
+          for (const [dx, dy] of offsets) {
+            const els = document.elementsFromPoint(cx + dx, cy + dy);
+            for (const el of els) {
+              if (el && el.closest && el.closest('g.edge.in-focus')) return true;
+            }
+          }
+          return false;
+        };
+
         viewport.addEventListener('mousedown', (ev) => {
-          // Only pan when the mousedown lands on empty canvas — not on a node
-          // or edge (SVG elements), not on the zoom/legend chrome.
-          const t = ev.target;
-          if (t.closest && (t.closest('g.node') || t.closest('g.edge') || t.closest('#zoom') || t.closest('#legend') || t.closest('#edgeInfo'))) return;
+          if (chromeAt(ev.target)) return;
           if (ev.button !== 0) return;
-          panning = true;
-          viewport.classList.add('panning');
+          panning = true; moved = false;
           panStartX = ev.clientX; panStartY = ev.clientY;
           panStartScrollL = viewport.scrollLeft; panStartScrollT = viewport.scrollTop;
           ev.preventDefault();
         });
         window.addEventListener('mousemove', (ev) => {
           if (!panning) return;
-          viewport.scrollLeft = panStartScrollL - (ev.clientX - panStartX);
-          viewport.scrollTop  = panStartScrollT - (ev.clientY - panStartY);
+          const dx = ev.clientX - panStartX, dy = ev.clientY - panStartY;
+          if (!moved && (dx*dx + dy*dy) > DRAG_PX * DRAG_PX) {
+            moved = true;
+            viewport.classList.add('panning');
+          }
+          if (moved) {
+            viewport.scrollLeft = panStartScrollL - dx;
+            viewport.scrollTop  = panStartScrollT - dy;
+          }
         });
-        window.addEventListener('mouseup', () => {
+        window.addEventListener('mouseup', (ev) => {
           if (!panning) return;
+          const wasPan = moved;
           panning = false;
           viewport.classList.remove('panning');
+          if (wasPan) return;
+          // True click with no drag: only clear if we weren't aiming near a
+          // focused edge.
+          if (!nearFocusedEdge(ev.clientX, ev.clientY)) clearFocus();
         });
 
         viewport.addEventListener('wheel', (e) => {
@@ -451,9 +488,8 @@ export class GapsPanel {
               if (info && info.file) vscode.postMessage({ type: 'openFile', file: info.file, line: info.line });
             });
           }
-          // Any click that wasn't stopped by a node/edge handler lands here and
-          // clears focus — whitespace, SVG background, cluster chrome, etc.
-          document.getElementById('viewport').addEventListener('click', () => clearFocus());
+          // Blank-space deselect is handled by the mouseup logic above
+          // (requires no drag + proximity check), not a raw click listener.
 
           for (const [svgEdgeId, g] of edgeById) {
             const e = edgeIds[svgEdgeId];
