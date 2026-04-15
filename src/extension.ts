@@ -7,9 +7,10 @@ import {
 } from "./webview";
 import {
   DashboardState, SorriesProvider, GapsProvider, CoverageProvider, CommandsProvider,
-  ingestSorryInventory, ingestGapReport, ingestCoverage,
+  ingestSorryInventory, ingestGapReport, ingestCoverage, ingestCoverageBlocks,
 } from "./tree";
 import { scanFileForSorries, scanFileForDecls } from "./scanner";
+import { listProjectSorries, runProjectCoverage } from "./coverage";
 
 const dash = new DashboardState();
 let output: vscode.OutputChannel;
@@ -47,6 +48,7 @@ export function activate(context: vscode.ExtensionContext) {
       show(context, "Results", renderRaw("Results", "(no command run yet)"));
     }),
     vscode.commands.registerCommand("meridian.showOutput", () => output.show(true)),
+    vscode.commands.registerCommand("meridian.coverageProject", () => runProjectCoverageCmd()),
   );
 
   // Sidebar Sorries view: refresh on active editor change AND on save (current file only).
@@ -72,6 +74,11 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   );
   refreshSorriesForActive();
+
+  // Optional: run #mathlib_coverage project-wide on activation.
+  if (vscode.workspace.getConfiguration("meridian").get<boolean>("coverageOnStartup", false)) {
+    runProjectCoverageCmd().catch((e) => output.appendLine(`startup coverage failed: ${e}`));
+  }
 }
 
 export function deactivate() {}
@@ -188,6 +195,34 @@ function resolveProject(): { lakeRoot?: string; rootImport: string } {
   const lakeRoot = findLakeRoot(start);
   if (!lakeRoot) return { rootImport: "Meridian" };
   return { lakeRoot, rootImport: guessRootImport(lakeRoot) };
+}
+
+async function runProjectCoverageCmd() {
+  const { lakeRoot, rootImport } = resolveProject();
+  if (!lakeRoot) {
+    vscode.window.showErrorMessage("Meridian: no Lake project found.");
+    return;
+  }
+  await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: "Meridian: project-wide Mathlib coverage", cancellable: true },
+    async (progress, token) => {
+      progress.report({ message: "scanning sorries…" });
+      const decls = await listProjectSorries(lakeRoot, rootImport, token);
+      output.appendLine(`\n=== project coverage: ${decls.length} sorry-bearing decls ===`);
+      for (const d of decls) output.appendLine(`  ${d}`);
+      if (token.isCancellationRequested) return;
+      if (!decls.length) {
+        vscode.window.showInformationMessage("Meridian: no sorries found in project.");
+        ingestCoverageBlocks(dash, []);
+        return;
+      }
+      progress.report({ message: `running coverage on ${decls.length} decls (first run builds Mathlib DiscrTree, can take minutes)` });
+      const blocks = await runProjectCoverage(lakeRoot, rootImport, decls, token);
+      output.appendLine(`coverage parsed: ${blocks.length} blocks`);
+      ingestCoverageBlocks(dash, blocks);
+      vscode.window.showInformationMessage(`Meridian: coverage populated for ${blocks.length} declarations.`);
+    },
+  );
 }
 
 async function refreshDashboard(_context: vscode.ExtensionContext) {

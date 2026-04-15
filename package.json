@@ -56,7 +56,8 @@
       { "command": "meridian.openDashboard",   "title": "Open Dashboard",           "category": "Meridian" },
       { "command": "meridian.refreshDashboard","title": "Refresh Dashboard",        "category": "Meridian", "icon": "$(refresh)" },
       { "command": "meridian.showResults",     "title": "Show Results Panel",       "category": "Meridian" },
-      { "command": "meridian.showOutput",      "title": "Show Output Channel",      "category": "Meridian" }
+      { "command": "meridian.showOutput",      "title": "Show Output Channel",      "category": "Meridian" },
+      { "command": "meridian.coverageProject", "title": "Mathlib Coverage (Whole Project)", "category": "Meridian" }
     ],
     "viewsContainers": {
       "activitybar": [
@@ -99,6 +100,11 @@
           "type": "number",
           "default": 400000,
           "description": "Default heartbeats for meridian_search."
+        },
+        "meridian.coverageOnStartup": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run #mathlib_coverage across every sorry in the project on extension activation. First run is slow (builds a Mathlib DiscrTree)."
         }
       }
     }
