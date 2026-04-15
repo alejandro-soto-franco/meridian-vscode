@@ -34,7 +34,7 @@ export interface GraphNode {
   status?: DeclStatus;
 }
 
-export interface GraphEdge { from: string; to: string; }
+export interface GraphEdge { from: string; to: string; count: number; }
 
 export interface DepGraph {
   nodes: GraphNode[];
@@ -168,10 +168,14 @@ export function buildGraphForFile(
   leanFile: string,
 ): DepGraph {
   const nodes = new Map<string, GraphNode>();
-  const edges: GraphEdge[] = [];
+  const edgeCount = new Map<string, { from: string; to: string; count: number }>();
   const addNode = (n: GraphNode) => { if (!nodes.has(n.id)) nodes.set(n.id, n); };
   const addEdge = (from: string, to: string) => {
-    if (from !== to) edges.push({ from, to });
+    if (from === to) return;
+    const k = `${from}->${to}`;
+    const e = edgeCount.get(k);
+    if (e) e.count++;
+    else edgeCount.set(k, { from, to, count: 1 });
   };
 
   const projectIdx = indexProjectDecls(lakeRoot, rootImport);
@@ -182,6 +186,11 @@ export function buildGraphForFile(
     const last = name.split(".").pop();
     if (last) shortToFqn.set(last, name);
   }
+  // Extend the short-name index with decls harvested from Mathlib files that
+  // the current file actually imports. This lets a bare ref like
+  // `exists_forall_..._hasDerivAt` resolve to its Mathlib import so the gold
+  // column wires correctly.
+  const fqnToImport = new Map<string, string>();
   const src = fs.readFileSync(leanFile, "utf8");
   const lines = src.split(/\r?\n/);
   const rootDecls = scanLinesForDecls(lines);
@@ -218,11 +227,38 @@ export function buildGraphForFile(
   type ImportMatcher = (refs: string[]) => boolean;
   const matchers = new Map<string, ImportMatcher>();
   for (const imp of fileImports) {
-    if (imp === "Mathlib" || imp.startsWith("Mathlib.") ||
-        imp.startsWith("Std.") || imp.startsWith("Lean.") || imp.startsWith("Init.")) {
-      matchers.set(imp, (refs) => refs.some((r) => r === imp || r.startsWith(imp + ".")));
+    const exported = new Set<string>();
+
+    const isMathlib = imp === "Mathlib" || imp.startsWith("Mathlib.");
+    const isStd     = imp.startsWith("Std.") || imp.startsWith("Batteries.");
+    const isLean    = imp.startsWith("Lean.") || imp.startsWith("Init.");
+
+    if (isMathlib || isStd || isLean) {
+      // Try to find the actual source file of this import inside .lake/packages.
+      const candidates: string[] = [];
+      if (isMathlib) candidates.push(path.join(lakeRoot, ".lake", "packages", "mathlib", imp.replace(/\./g, "/") + ".lean"));
+      if (isStd)     candidates.push(path.join(lakeRoot, ".lake", "packages", "batteries", imp.replace(/\./g, "/") + ".lean"));
+      for (const p of candidates) {
+        if (!fs.existsSync(p)) continue;
+        try {
+          const src = fs.readFileSync(p, "utf8").split(/\r?\n/);
+          for (const d of scanLinesForDecls(src)) {
+            exported.add(d.name);
+            const last = d.name.split(".").pop();
+            if (last) {
+              exported.add(last);
+              shortToFqn.set(last, d.name);
+              fqnToImport.set(d.name, imp);
+            }
+            fqnToImport.set(d.name, imp);
+          }
+        } catch {}
+      }
+      matchers.set(imp, (refs) => refs.some((r) =>
+        r === imp || r.startsWith(imp + ".") || exported.has(r) ||
+        fqnToImport.get(r) === imp,
+      ));
     } else {
-      const exported = new Set<string>();
       for (const [name] of projectIdx) {
         if (name === imp || name.startsWith(imp + ".")) {
           exported.add(name);
@@ -313,7 +349,7 @@ export function buildGraphForFile(
     addEdge(e.from, e.to);
   }
 
-  return { nodes: [...nodes.values()], edges, rootFile: leanFile };
+  return { nodes: [...nodes.values()], edges: [...edgeCount.values()], rootFile: leanFile };
 }
 
 // Build a Graphviz HTML-like label that renders the namespace segment in
@@ -421,8 +457,10 @@ export function graphToDot(g: DepGraph): string {
   }
   for (let i = 0; i < g.edges.length; i++) {
     const e = g.edges[i]!;
-    // Explicit id so the SVG carries a stable, parseable identifier per edge.
-    lines.push(`  "${esc(e.from)}" -> "${esc(e.to)}" [id="e${i}"];`);
+    const thickness = Math.min(3.5, 0.9 + Math.log2(e.count + 1) * 0.7);
+    const attrs = [`id="e${i}"`, `penwidth=${thickness.toFixed(2)}`];
+    if (e.count > 1) attrs.push(`tooltip="${e.count}×"`);
+    lines.push(`  "${esc(e.from)}" -> "${esc(e.to)}" [${attrs.join(", ")}];`);
   }
   lines.push("}");
   return lines.join("\n");
@@ -430,11 +468,11 @@ export function graphToDot(g: DepGraph): string {
 
 // Parallel mappings so the webview can wire up focus / click handlers
 // without parsing fragile SVG title text.
-export function edgeIdMap(g: DepGraph): Record<string, { from: string; to: string }> {
-  const m: Record<string, { from: string; to: string }> = {};
+export function edgeIdMap(g: DepGraph): Record<string, { from: string; to: string; count: number }> {
+  const m: Record<string, { from: string; to: string; count: number }> = {};
   for (let i = 0; i < g.edges.length; i++) {
     const e = g.edges[i]!;
-    m[`e${i}`] = { from: e.from, to: e.to };
+    m[`e${i}`] = { from: e.from, to: e.to, count: e.count };
   }
   return m;
 }

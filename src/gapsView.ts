@@ -122,7 +122,7 @@ export class GapsPanel {
     nodeMeta: Record<string, { file: string | null; line: number | null; kind: string; label: string }>,
     adjacency: Record<string, { neighbours: string[]; edges: string[] }>,
     nodeIds: Record<string, string>,
-    edgeIds: Record<string, { from: string; to: string }>,
+    edgeIds: Record<string, { from: string; to: string; count: number }>,
   ): string {
     const dotJson = JSON.stringify(dot);
     const metaJson = JSON.stringify(nodeMeta);
@@ -395,7 +395,8 @@ export class GapsPanel {
               ev.stopPropagation();
               fromEl.textContent = (meta[from] && meta[from].label) || from;
               toEl.textContent   = (meta[to]   && meta[to].label)   || to;
-              kindEl.textContent = '(' + kindLabel(meta[to] && meta[to].kind) + ')';
+              const countSuffix = e.count > 1 ? ', file decl ' + e.count + '×' : '';
+              kindEl.textContent = '(' + kindLabel(meta[to] && meta[to].kind) + countSuffix + ')';
               fromEl.onclick = () => {
                 const m = meta[from];
                 if (m && m.file) vscode.postMessage({ type: 'openFile', file: m.file, line: m.line });
