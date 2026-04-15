@@ -28,7 +28,7 @@ export type DeclStatus = "complete" | "partial" | "stub";
 export interface GraphNode {
   id: string;
   label: string;
-  kind: "root" | "project" | "mathlib" | "std" | "unknown" | "import";
+  kind: "root" | "project" | "mathlib" | "std" | "unknown" | "import" | "mathlibImport";
   file?: string;
   line?: number;
   status?: DeclStatus;
@@ -481,7 +481,7 @@ export function buildGraphForFile(
   for (const imp of fileImports) {
     const isMathlib = imp === "Mathlib" || imp.startsWith("Mathlib.");
     if (isMathlib) {
-      addNode({ id: `import:${imp}`, label: imp, kind: "import", file: importSourceFile(imp) });
+      addNode({ id: `import:${imp}`, label: imp, kind: "mathlibImport", file: importSourceFile(imp) });
     } else if (usedImports.has(imp)) {
       const status = aggregateModuleStatus(imp, projectIdx);
       // Project import: its source file is the matching .lean inside the project.
@@ -538,7 +538,8 @@ export function graphToDot(g: DepGraph): string {
     mathlib: { stroke: "#7c3aed", fill: "#ede9fe",  text: "#4c1d95" },
     std:     { stroke: "#4a5568", fill: "#e5e7eb",  text: "#1f2937" },
     unknown: { stroke: "#6c757d", fill: "#ffffff",  text: "#2d3748" },
-    import:  { stroke: "#b8860b", fill: "#f4c430",  text: "#3a2900" },
+    import:        { stroke: "#b8860b", fill: "#f4c430",  text: "#3a2900" },
+    mathlibImport: { stroke: "#b8860b", fill: "#ede9fe",  text: "#4c1d95" },
   } as const;
 
   const style = (n: GraphNode): string => {
@@ -580,9 +581,9 @@ export function graphToDot(g: DepGraph): string {
     `  node [fontname="Courier", fontsize=10, penwidth=1.3];`,
     `  edge [color="#8e9aaf80", arrowsize=0.55, penwidth=0.9, arrowhead=vee, tailport=e, headport=w];`,
   ];
-  const imports = g.nodes.filter((n) => n.kind === "import");
+  const imports = g.nodes.filter((n) => n.kind === "import" || n.kind === "mathlibImport");
   const roots   = g.nodes.filter((n) => n.kind === "root");
-  const middle  = g.nodes.filter((n) => n.kind !== "import" && n.kind !== "root");
+  const middle  = g.nodes.filter((n) => n.kind !== "import" && n.kind !== "mathlibImport" && n.kind !== "root");
   const nodeIdFor = (i: number) => `n${i}`;
   const nodeIndex = new Map<string, number>();
   g.nodes.forEach((n, i) => nodeIndex.set(n.id, i));

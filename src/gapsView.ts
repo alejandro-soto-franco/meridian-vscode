@@ -167,6 +167,7 @@ export class GapsPanel {
       #legend .mathlib  { background: #ede9fe; border: 1.3px solid #7c3aed; }
       #legend .std      { background: #e5e7eb; border: 1.3px solid #4a5568; }
       #legend .import   { background: #f4c430; border: 1.3px solid #b8860b; }
+      #legend .mathlibImport { background: #ede9fe; border: 1.3px solid #b8860b; }
 
       #viewport {
         position: relative;
@@ -261,6 +262,7 @@ export class GapsPanel {
       #edgeInfo .use:hover { background: var(--vscode-list-hoverBackground); }
     </style></head><body>
       <div id="legend">
+        <span><i class="mathlibImport"></i>Mathlib import</span>
         <span><i class="import"></i>import</span>
         <span><i class="complete"></i>complete</span>
         <span><i class="partial"></i>partial</span>
@@ -373,7 +375,7 @@ export class GapsPanel {
 
           for (const [nodeId, g] of nodeById) {
             const info = meta[nodeId];
-            const isImport = info && info.kind === 'import';
+            const isImport = info && (info.kind === 'import' || info.kind === 'mathlibImport');
             let clickTimer = null;
             g.addEventListener('click', (ev) => {
               ev.stopPropagation();
