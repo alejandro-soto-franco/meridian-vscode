@@ -6,9 +6,10 @@ const NS_RE = /^\s*namespace\s+([A-Za-z_][\w.']*)/;
 const END_RE = /^\s*end\s+([A-Za-z_][\w.']*)\s*$/;
 const SORRY_RE = /\bsorry\b/;
 
-// Scan lines of a Lean source, producing (namespace-aware) decl names with line numbers.
-export function scanLinesForDecls(lines: string[]): { name: string; line: number }[] {
-  const out: { name: string; line: number }[] = [];
+// Scan lines of a Lean source, producing (namespace-aware) decl names with
+// line numbers and the keyword that introduced them (theorem / def / …).
+export function scanLinesForDecls(lines: string[]): { name: string; line: number; keyword: string }[] {
+  const out: { name: string; line: number; keyword: string }[] = [];
   const nsStack: string[] = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
@@ -22,9 +23,10 @@ export function scanLinesForDecls(lines: string[]): { name: string; line: number
     }
     const m = DECL_RE.exec(line);
     if (m) {
+      const keyword = m[1]!;
       const local = m[2]!;
       const fq = nsStack.length ? `${nsStack.join(".")}.${local}` : local;
-      out.push({ name: fq, line: i + 1 });
+      out.push({ name: fq, line: i + 1, keyword });
     }
   }
   return out;

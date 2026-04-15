@@ -259,6 +259,7 @@ export class GapsPanel {
       #edgeInfo .use { cursor: pointer; padding: 1px 7px; border-radius: 9px; border: 1px solid var(--border); }
       #edgeInfo .use.signature { border-color: #4c9aff; color: #4c9aff; }
       #edgeInfo .use.proof     { border-color: #8e9aaf; color: var(--muted); }
+      #edgeInfo .use.body      { border-color: #a0a0a0; color: var(--fg); }
       #edgeInfo .use:hover { background: var(--vscode-list-hoverBackground); }
     </style></head><body>
       <div id="legend">
@@ -319,12 +320,14 @@ export class GapsPanel {
 
         const kindLabel = (k) => {
           switch (k) {
-            case 'mathlib': return 'Mathlib reference';
-            case 'std':     return 'Std/Lean reference';
-            case 'project': return 'project reference';
-            case 'import':  return 'file import';
-            case 'root':    return 'file declaration';
-            default:        return 'unresolved reference';
+            case 'mathlib':       return 'Mathlib reference';
+            case 'std':           return 'Std / Lean reference';
+            case 'project':       return 'project reference';
+            case 'import':        return 'file import';
+            case 'mathlibImport': return 'Mathlib import';
+            case 'root':          return 'file declaration';
+            case 'unknown':       return 'unresolved reference';
+            default:              return k ? String(k) : 'reference';
           }
         };
 

@@ -34,7 +34,7 @@ export interface GraphNode {
   status?: DeclStatus;
 }
 
-export interface EdgeUse { line: number; kind: "signature" | "proof"; }
+export interface EdgeUse { line: number; kind: "signature" | "proof" | "body"; }
 export interface GraphEdge {
   from: string;
   to: string;
@@ -405,9 +405,13 @@ export function buildGraphForFile(
 
     // Per-ref usage locations: find each occurrence of the ref (or its
     // short-name synonym, when the file calls it unqualified) on each line,
-    // and tag it signature vs proof based on first `:=` split.
+    // and tag it signature vs proof/body based on first `:=` split. Body
+    // side is called "proof" only for theorem/lemma; for def/abbrev/instance/
+    // example it's just "body".
     const bodyLines = body.split(/\r?\n/);
     const split = proofStartLine(body);
+    const rhsKind: EdgeUse["kind"] =
+      d.keyword === "theorem" || d.keyword === "lemma" ? "proof" : "body";
     const useLocationsFor = (ref: string): EdgeUse[] => {
       const tokens = new Set<string>();
       tokens.add(ref);
@@ -420,7 +424,7 @@ export function buildGraphForFile(
         if (patterns.some((re) => re.test(ln))) {
           out.push({
             line: d.line + j,
-            kind: split === undefined || j < split ? "signature" : "proof",
+            kind: split === undefined || j < split ? "signature" : rhsKind,
           });
         }
       }
