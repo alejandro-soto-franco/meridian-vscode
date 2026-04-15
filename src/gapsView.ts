@@ -99,7 +99,8 @@ export class GapsPanel {
 
   private shell(message: string): string {
     return `<!doctype html><html><head><meta charset="utf-8">
-      <link rel="stylesheet" href="https://fonts.cdnfonts.com/css/cmu-sans-serif">
+      <link rel="stylesheet" href="https://fonts.cdnfonts.com/css/latin-modern-sans">
+      <link rel="stylesheet" href="https://fonts.cdnfonts.com/css/latin-modern-mono">
       <style>
         :root { color-scheme: light dark; }
         body { margin: 0; padding: 2rem; display: flex; align-items: center; justify-content: center;
@@ -128,7 +129,9 @@ export class GapsPanel {
         --bg: var(--vscode-editor-background);
         --muted: var(--vscode-descriptionForeground);
         --border: var(--vscode-panel-border);
-        --cm: "CMU Sans Serif", "Latin Modern Sans", "Helvetica Neue", system-ui, sans-serif;
+        --lmss: "Latin Modern Sans", "CMU Sans Serif", "Helvetica Neue", system-ui, sans-serif;
+        --lmmono: "Latin Modern Mono", "CMU Typewriter Text", "JetBrains Mono", "Menlo", ui-monospace, monospace;
+        --cm: var(--lmss);
       }
       html, body { height: 100%; }
       body {
@@ -169,10 +172,10 @@ export class GapsPanel {
         width: max-content;
       }
       #stage svg { display: block; }
-      #stage svg text {
-        font-family: var(--cm) !important;
-        font-size: 10px !important;
-      }
+      /* Do not force a single font-family here — Graphviz emits per-span
+         <text font-family="Latin Modern Mono"> and "Latin Modern Sans" inside
+         HTML-like labels, and we want those to win. Only set fallback size. */
+      #stage svg text { font-size: 10px !important; }
       #stage svg path { stroke-linecap: round; stroke-linejoin: round; }
       #stage g.node { cursor: pointer; transition: opacity 150ms ease; }
       #stage g.node:hover { filter: drop-shadow(0 1px 4px rgba(76,154,255,.35)); }
@@ -367,9 +370,9 @@ export class GapsPanel {
               if (info && info.file) vscode.postMessage({ type: 'openFile', file: info.file, line: info.line });
             });
           });
-          document.getElementById('viewport').addEventListener('click', (ev) => {
-            if (ev.target === ev.currentTarget || ev.target === stage) clearFocus();
-          });
+          // Any click that wasn't stopped by a node/edge handler lands here and
+          // clears focus — whitespace, SVG background, cluster chrome, etc.
+          document.getElementById('viewport').addEventListener('click', () => clearFocus());
 
           stage.querySelectorAll('g.edge').forEach((g) => {
             const t = g.querySelector('title');

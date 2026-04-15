@@ -138,13 +138,21 @@ export function buildGraphForFile(
   return { nodes: [...nodes.values()], edges, rootFile: leanFile };
 }
 
-// Keep labels compact: show only the terminal segment of the qualified name.
-// Full name stays in the tooltip (graphviz `tooltip=`).
-function shortLabel(name: string): string {
+// Build a Graphviz HTML-like label that renders the namespace segment in
+// Latin Modern Sans and the terminal declaration name in Latin Modern Mono.
+// Returns the full label expression including the surrounding angle brackets.
+// (Graphviz HTML-like labels: https://graphviz.org/doc/info/shapes.html#html)
+function htmlLabel(name: string): string {
   const parts = name.split(".");
-  if (parts.length <= 1) return name;
-  // Show last two segments if available — e.g. "Varifold.firstVariation".
-  return parts.slice(-2).join(".");
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  if (parts.length <= 1) {
+    return `<<FONT FACE="Latin Modern Mono">${esc(name)}</FONT>>`;
+  }
+  const decl = parts[parts.length - 1]!;
+  const ns = parts.slice(-2, -1).join("."); // parent segment only, to keep it short
+  return `<<FONT FACE="Latin Modern Sans">${esc(ns)}</FONT>` +
+         `<FONT FACE="Latin Modern Sans">.</FONT>` +
+         `<FONT FACE="Latin Modern Mono">${esc(decl)}</FONT>>`;
 }
 
 export function graphToDot(g: DepGraph): string {
@@ -187,21 +195,21 @@ export function graphToDot(g: DepGraph): string {
     `  ranksep=0.9;`,
     `  nodesep=0.4;`,
     `  pad=0.25;`,
-    `  node [fontname="CMU Sans Serif", fontsize=10, penwidth=1.3];`,
+    `  node [fontname="Latin Modern Sans", fontsize=10, penwidth=1.3];`,
     `  edge [color="#8e9aaf80", arrowsize=0.55, penwidth=0.9, arrowhead=vee];`,
   ];
   const imports = g.nodes.filter((n) => n.kind === "import");
   const others  = g.nodes.filter((n) => n.kind !== "import");
   for (const n of others) {
     lines.push(
-      `  "${esc(n.id)}" [label="${esc(shortLabel(n.label))}", tooltip="${esc(n.id)}", ${style(n)}];`,
+      `  "${esc(n.id)}" [label=${htmlLabel(n.label)}, tooltip="${esc(n.id)}", ${style(n)}];`,
     );
   }
   if (imports.length) {
     lines.push(`  subgraph cluster_imports { rank=source; style=invis;`);
     for (const n of imports) {
       lines.push(
-        `    "${esc(n.id)}" [label="${esc(shortLabel(n.label))}", tooltip="${esc(n.id)}", ${style(n)}];`,
+        `    "${esc(n.id)}" [label=${htmlLabel(n.label)}, tooltip="${esc(n.id)}", ${style(n)}];`,
       );
     }
     lines.push(`  }`);
