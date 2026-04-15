@@ -91,21 +91,30 @@ export function buildGraphForFile(
   const lines = src.split(/\r?\n/);
   const rootDecls = scanLinesForDecls(lines);
 
-  // Parse `import Mathlib.X.Y` at the top of the file; these "flow into" every decl.
-  const importRe = /^\s*import\s+(Mathlib(?:\.[A-Za-z_][\w']*)+)\s*$/;
-  const mathlibImports: string[] = [];
+  // Parse every `import X.Y` line in the preamble. Mathlib imports become the
+  // gold "feed-in" column; non-Mathlib imports still flow in but with a
+  // neutral tint so the Mathlib surface stays visually distinct.
+  const importRe = /^\s*import\s+([A-Za-z_][\w']*(?:\.[A-Za-z_][\w']*)*)\s*$/;
+  const fileImports: string[] = [];
+  let inBlockComment = false;
   for (const ln of lines) {
+    const trimmed = ln.trim();
+    // Track /- ... -/ block comments so we don't break on them.
+    if (inBlockComment) { if (ln.includes("-/")) inBlockComment = false; continue; }
+    if (trimmed.startsWith("/-") && !trimmed.includes("-/")) { inBlockComment = true; continue; }
+    if (!trimmed || trimmed.startsWith("--") || trimmed.startsWith("/-")) continue;
     const m = importRe.exec(ln);
-    if (m) mathlibImports.push(m[1]!);
-    // Stop scanning once we hit any non-import, non-blank, non-comment line.
-    if (ln.trim().length && !/^\s*(import|--|\/-|$)/.test(ln) && !ln.startsWith("/-")) {
-      if (!importRe.test(ln)) break;
-    }
+    if (m) { fileImports.push(m[1]!); continue; }
+    // First non-import, non-comment, non-blank line: preamble is over.
+    break;
   }
 
-  // Add Mathlib import nodes feeding into every decl in the file.
-  for (const imp of mathlibImports) {
-    addNode({ id: `import:${imp}`, label: imp, kind: "import" });
+  // Add import nodes feeding into every decl in the file.
+  // Mathlib imports keep the gold `import` kind; everything else flows in as
+  // a neutral `project`-style import so it doesn't compete visually.
+  for (const imp of fileImports) {
+    const kind: GraphNode["kind"] = imp === "Mathlib" || imp.startsWith("Mathlib.") ? "import" : "project";
+    addNode({ id: `import:${imp}`, label: imp, kind });
   }
 
   for (let i = 0; i < rootDecls.length; i++) {
@@ -113,7 +122,7 @@ export function buildGraphForFile(
     const end = i + 1 < rootDecls.length ? rootDecls[i + 1]!.line - 1 : lines.length;
     const body = lines.slice(d.line - 1, end).join("\n");
     addNode({ id: d.name, label: d.name, kind: "root", file: leanFile, line: d.line });
-    for (const imp of mathlibImports) addEdge(`import:${imp}`, d.name);
+    for (const imp of fileImports) addEdge(`import:${imp}`, d.name);
 
     const level1 = refsFromBody(body).filter((r) => r !== d.name);
     for (const r of level1) {
@@ -145,14 +154,8 @@ export function buildGraphForFile(
 function htmlLabel(name: string): string {
   const parts = name.split(".");
   const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  if (parts.length <= 1) {
-    return `<<FONT FACE="Latin Modern Mono">${esc(name)}</FONT>>`;
-  }
-  const decl = parts[parts.length - 1]!;
-  const ns = parts.slice(-2, -1).join("."); // parent segment only, to keep it short
-  return `<<FONT FACE="Latin Modern Sans">${esc(ns)}</FONT>` +
-         `<FONT FACE="Latin Modern Sans">.</FONT>` +
-         `<FONT FACE="Latin Modern Mono">${esc(decl)}</FONT>>`;
+  const short = parts.length <= 2 ? name : parts.slice(-2).join(".");
+  return `<<FONT FACE="Latin Modern Mono">${esc(short)}</FONT>>`;
 }
 
 export function graphToDot(g: DepGraph): string {
@@ -179,10 +182,10 @@ export function graphToDot(g: DepGraph): string {
       `fillcolor="${fill}"`,
       `color="${p.stroke}"`,
       `fontcolor="${p.text}"`,
-      `height=0.26`,
-      `width=0`,
+      // No fixed height/width — Graphviz auto-sizes HTML-labelled nodes,
+      // but we add generous padding so text never touches the stroke.
       `fixedsize=false`,
-      `margin="0.10,0.04"`,
+      `margin="0.18,0.08"`,
     ].join(", ");
   };
 
@@ -195,7 +198,7 @@ export function graphToDot(g: DepGraph): string {
     `  ranksep=0.9;`,
     `  nodesep=0.4;`,
     `  pad=0.25;`,
-    `  node [fontname="Latin Modern Sans", fontsize=10, penwidth=1.3];`,
+    `  node [fontname="Latin Modern Mono", fontsize=10, penwidth=1.3];`,
     `  edge [color="#8e9aaf80", arrowsize=0.55, penwidth=0.9, arrowhead=vee];`,
   ];
   const imports = g.nodes.filter((n) => n.kind === "import");
