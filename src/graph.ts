@@ -84,6 +84,44 @@ export function classifyBody(body: string): DeclStatus {
   return "partial";
 }
 
+// Full Mathlib symbol index, keyed by (fully-qualified and short) name →
+// module FQN where the symbol is declared. Built once per lakeRoot and cached
+// for the session; first build is slow (a few seconds on a full Mathlib).
+interface MathlibIndex {
+  fqnToModule: Map<string, string>;
+  shortToModule: Map<string, string>;
+}
+const mathlibIndexCache = new Map<string, MathlibIndex>();
+
+export function getMathlibIndex(lakeRoot: string): MathlibIndex {
+  const cached = mathlibIndexCache.get(lakeRoot);
+  if (cached) return cached;
+  const base = path.join(lakeRoot, ".lake", "packages", "mathlib", "Mathlib");
+  const idx: MathlibIndex = { fqnToModule: new Map(), shortToModule: new Map() };
+  if (!fs.existsSync(base)) { mathlibIndexCache.set(lakeRoot, idx); return idx; }
+  const walk = (dir: string) => {
+    let ents: fs.Dirent[];
+    try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const ent of ents) {
+      const p = path.join(dir, ent.name);
+      if (ent.isDirectory()) { walk(p); continue; }
+      if (!ent.isFile() || !p.endsWith(".lean")) continue;
+      const rel = path.relative(path.join(lakeRoot, ".lake", "packages", "mathlib"), p);
+      const moduleFqn = rel.slice(0, -".lean".length).split(path.sep).join(".");
+      let src: string;
+      try { src = fs.readFileSync(p, "utf8"); } catch { continue; }
+      for (const d of scanLinesForDecls(src.split(/\r?\n/))) {
+        if (!idx.fqnToModule.has(d.name)) idx.fqnToModule.set(d.name, moduleFqn);
+        const last = d.name.split(".").pop();
+        if (last && !idx.shortToModule.has(last)) idx.shortToModule.set(last, moduleFqn);
+      }
+    }
+  };
+  walk(base);
+  mathlibIndexCache.set(lakeRoot, idx);
+  return idx;
+}
+
 // Collect project-wide decl index with status classification.
 export function indexProjectDecls(lakeRoot: string, rootImport: string): Map<string, DeclIndexEntry> {
   const idx = new Map<string, DeclIndexEntry>();
@@ -131,6 +169,12 @@ export function refsFromBody(body: string): string[] {
     const n = m[1]!;
     if (LEAN_RESERVED.has(n)) continue;
     out.add(n);
+    // Lowercase head (e.g. `hf.exists_foo_bar`) is almost always a local
+    // hypothesis being dot-applied. Emit the tail too so the ref can resolve.
+    const parts = n.split(".");
+    if (parts.length >= 2 && /^[a-z_]/.test(parts[0]!)) {
+      out.add(parts.slice(1).join("."));
+    }
   }
   return [...out];
 }
@@ -179,6 +223,7 @@ export function buildGraphForFile(
   };
 
   const projectIdx = indexProjectDecls(lakeRoot, rootImport);
+  const mathlib = getMathlibIndex(lakeRoot);
   // Short-name → FQN map. If a short name is ambiguous (multiple FQNs), the
   // last one wins; that's an acceptable compromise for a visualization.
   const shortToFqn = new Map<string, string>();
@@ -277,12 +322,25 @@ export function buildGraphForFile(
 
   // Determine which import (if any) a given reference came from. Returns
   // the first matching import so each ref edge-connects to one upstream.
+  // Falls back to the global Mathlib index for symbols that Meridian's
+  // direct-import scan missed (e.g. transitively imported Mathlib files).
+  const transitiveMathlibImports = new Set<string>();
   const importForRef = (ref: string): string | undefined => {
     for (const imp of fileImports) {
       const fn = matchers.get(imp)!;
       if (fn([ref])) return imp;
     }
-    return undefined;
+    // Lookup in global Mathlib index. The ref may be fully-qualified
+    // (e.g. Real.sqrt_le_sqrt) or bare (e.g. sqrt_le_sqrt).
+    const sourceModule = mathlib.fqnToModule.get(ref) ?? mathlib.shortToModule.get(ref);
+    if (!sourceModule) return undefined;
+    // Prefer a direct import whose module is an ancestor of the source.
+    for (const imp of fileImports) {
+      if (imp === sourceModule || sourceModule.startsWith(imp + ".")) return imp;
+    }
+    // Otherwise surface the actual source file as a transitive gold node.
+    transitiveMathlibImports.add(sourceModule);
+    return sourceModule;
   };
 
   for (let i = 0; i < rootDecls.length; i++) {
@@ -331,11 +389,7 @@ export function buildGraphForFile(
     }
   }
 
-  // Mathlib imports always show (even with no resolved refs) so the gold
-  // column reflects what the file is actually pulling in. Project-local
-  // imports only appear when at least one ref resolved to them — the
-  // short-name resolution covers the common cases, and showing every
-  // unused project import would just crowd the graph.
+  // Direct imports: Mathlib imports always show, project imports only when used.
   for (const imp of fileImports) {
     const isMathlib = imp === "Mathlib" || imp.startsWith("Mathlib.");
     if (isMathlib) {
@@ -344,6 +398,12 @@ export function buildGraphForFile(
       const status = aggregateModuleStatus(imp, projectIdx);
       addNode({ id: `import:${imp}`, label: imp, kind: "project", status });
     }
+  }
+  // Transitive Mathlib modules: a symbol used here was found in a Mathlib
+  // file that this file doesn't directly import. Surface the actual source
+  // file so the wiring is correct and the user can see where it came from.
+  for (const m of transitiveMathlibImports) {
+    addNode({ id: `import:${m}`, label: m, kind: "import" });
   }
   for (const e of importEdges) {
     addEdge(e.from, e.to);
