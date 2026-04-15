@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { CATALOG, find } from "./catalog";
-import { buildReportSource, findLakeRoot, guessRootImport, pathToModule, runScratch } from "./runner";
+import { buildReportSource, findLakeRoot, guessRootImport, pathToModule, projectHasMeridian, runScratch } from "./runner";
 import {
   renderDepGraph, renderSorryInventory, renderGapReport, renderRaw, show,
 } from "./webview";
@@ -77,7 +77,7 @@ export function activate(context: vscode.ExtensionContext) {
   refreshSorriesForActive();
 
   const cfg = vscode.workspace.getConfiguration("meridian");
-  if (cfg.get<boolean>("gapsOnStartup", true)) {
+  if (cfg.get<boolean>("depGraphOnStartup", true)) {
     GapsPanel.show(context, resolveProject);
   }
   if (cfg.get<boolean>("coverageOnStartup", false)) {
@@ -121,6 +121,12 @@ async function runReport(context: vscode.ExtensionContext, title: string, comman
   const { lakeRoot, rootImport } = resolveProject();
   if (!lakeRoot) {
     vscode.window.showErrorMessage("Meridian: no Lake project found (missing lakefile.toml / lakefile.lean).");
+    return;
+  }
+  if (!projectHasMeridian(lakeRoot)) {
+    vscode.window.showErrorMessage(
+      `Meridian: this command needs Meridian as a Lake dependency, but it's not listed in ${lakeRoot}. Add it to lakefile.toml and run 'lake update'.`,
+    );
     return;
   }
 
@@ -207,6 +213,12 @@ async function runProjectCoverageCmd() {
   const { lakeRoot, rootImport } = resolveProject();
   if (!lakeRoot) {
     vscode.window.showErrorMessage("Meridian: no Lake project found.");
+    return;
+  }
+  if (!projectHasMeridian(lakeRoot)) {
+    vscode.window.showErrorMessage(
+      `Meridian: project-wide coverage requires Meridian as a Lake dependency, but it's not listed in ${lakeRoot}. Add it to lakefile.toml and run 'lake update'.`,
+    );
     return;
   }
   await vscode.window.withProgress(

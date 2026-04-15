@@ -58,7 +58,7 @@
       { "command": "meridian.showResults",     "title": "Show Results Panel",       "category": "Meridian" },
       { "command": "meridian.showOutput",      "title": "Show Output Channel",      "category": "Meridian" },
       { "command": "meridian.coverageProject", "title": "Mathlib Coverage (Whole Project)", "category": "Meridian" },
-      { "command": "meridian.showGaps",        "title": "Show Mathlib Gaps",                "category": "Meridian" }
+      { "command": "meridian.showGaps",        "title": "Show Dependency Graph",            "category": "Meridian" }
     ],
     "viewsContainers": {
       "activitybar": [
@@ -106,10 +106,10 @@
           "default": false,
           "description": "Run #mathlib_coverage across every sorry in the project on extension activation. First run is slow (builds a Mathlib DiscrTree)."
         },
-        "meridian.gapsOnStartup": {
+        "meridian.depGraphOnStartup": {
           "type": "boolean",
           "default": true,
-          "description": "Auto-open the Mathlib Gaps panel beside the editor on activation."
+          "description": "Auto-open the Dependency Graph panel beside the editor on activation."
         },
         "meridian.coverageIgnorePrefixes": {
           "type": "array",

@@ -18,6 +18,35 @@ export function findLakeRoot(start: string): string | undefined {
   }
 }
 
+// True if the Lake project lists Meridian as a dependency (either in the
+// manifest or top-level lakefile). Needed because our scratch buffers `import
+// Meridian` to use its # commands; projects that don't require Meridian will
+// error with "unknown module prefix 'Meridian'".
+export function projectHasMeridian(lakeRoot: string): boolean {
+  const manifest = path.join(lakeRoot, "lake-manifest.json");
+  if (fs.existsSync(manifest)) {
+    try {
+      const m = JSON.parse(fs.readFileSync(manifest, "utf8"));
+      const pkgs = (m?.packages ?? []) as Array<{ name?: string }>;
+      if (pkgs.some((p) => (p?.name ?? "").toLowerCase() === "meridian")) return true;
+    } catch {}
+  }
+  const toml = path.join(lakeRoot, "lakefile.toml");
+  if (fs.existsSync(toml)) {
+    try {
+      if (/\bmeridian\b/i.test(fs.readFileSync(toml, "utf8"))) return true;
+    } catch {}
+  }
+  const lean = path.join(lakeRoot, "lakefile.lean");
+  if (fs.existsSync(lean)) {
+    try {
+      if (/\bMeridian\b/.test(fs.readFileSync(lean, "utf8"))) return true;
+    } catch {}
+  }
+  // Also: we're *inside* the Meridian repo itself.
+  return path.basename(lakeRoot).toLowerCase() === "meridian";
+}
+
 // Guess the default import root for a Lake project: the top-level module matching the dir name.
 export function guessRootImport(lakeRoot: string): string {
   const base = path.basename(lakeRoot);
@@ -72,10 +101,19 @@ export async function runScratch(
   });
 }
 
-export function buildReportSource(rootImport: string, command: string, arg?: string, extra?: string[]): string {
+export function buildReportSource(
+  rootImport: string,
+  command: string,
+  arg?: string,
+  extra?: string[],
+  opts: { meridian?: boolean } = {},
+): string {
   const line = arg ? `${command} ${arg}` : command;
   const seen = new Set<string>();
-  const imports = ["Meridian", rootImport, ...(extra ?? [])]
+  const base: string[] = [];
+  if (opts.meridian !== false) base.push("Meridian");
+  base.push(rootImport);
+  const imports = [...base, ...(extra ?? [])]
     .filter((m) => m && !seen.has(m) && (seen.add(m), true))
     .map((m) => `import ${m}`)
     .join("\n");
