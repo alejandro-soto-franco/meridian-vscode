@@ -260,7 +260,10 @@ export function graphToDot(g: DepGraph): string {
     `digraph G {`,
     `  rankdir=LR;`,
     `  bgcolor="transparent";`,
-    `  splines=curved;`,
+    // splines=true routes smooth cubic Bézier edges that avoid node
+    // bounding boxes — straight when possible, arcing only around
+    // obstacles. 'curved' always arcs and clips through other nodes.
+    `  splines=true;`,
     `  overlap=false;`,
     `  ranksep=0.9;`,
     `  nodesep=0.4;`,
