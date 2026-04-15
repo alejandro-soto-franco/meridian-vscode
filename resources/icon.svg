@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <rect width="256" height="256" fill="#1a1f2e"/>
+  <g transform="translate(128 128)" fill="none" stroke="#f4c430" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <!-- bezel -->
+    <circle r="92"/>
+    <!-- needle: top half solid gold, bottom outline -->
+    <path d="M0 -86 L22 0 L0 86 L-22 0 Z"/>
+    <path d="M0 -86 L22 0 L-22 0 Z" fill="#f4c430" stroke="none"/>
+    <!-- centre pin -->
+    <circle r="10" fill="#1a1f2e" stroke-width="4"/>
+  </g>
+</svg>

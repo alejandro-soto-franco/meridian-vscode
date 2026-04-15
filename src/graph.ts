@@ -576,9 +576,13 @@ export function graphToDot(g: DepGraph): string {
     // obstacles. 'curved' always arcs and clips through other nodes.
     `  splines=true;`,
     `  overlap=false;`,
-    `  ranksep=0.9;`,
-    `  nodesep=0.4;`,
-    `  pad=0.25;`,
+    // Compact layout: ranksep controls horizontal spacing between columns,
+    // nodesep controls vertical spacing within a column. Smaller nodesep
+    // collapses the tall columns (imports, refs) into denser stacks.
+    `  ranksep=0.7;`,
+    `  nodesep=0.14;`,
+    `  pad=0.2;`,
+    `  ratio=compress;`,
     // Graphviz sizes nodes using this font's metrics. Courier is built-in
     // and close enough in glyph width to Latin Modern Mono that the boxes
     // end up a bit wider than strictly needed, which is what we want.
