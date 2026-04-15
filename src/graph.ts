@@ -542,7 +542,7 @@ export function graphToDot(g: DepGraph): string {
     mathlib: { stroke: "#7c3aed", fill: "#ede9fe",  text: "#4c1d95" },
     std:     { stroke: "#4a5568", fill: "#e5e7eb",  text: "#1f2937" },
     unknown: { stroke: "#6c757d", fill: "#ffffff",  text: "#2d3748" },
-    import:        { stroke: "#b8860b", fill: "#f4c430",  text: "#3a2900" },
+    import:        { stroke: "#f4c430", fill: "#c2410c",  text: "#ffffff" },
     mathlibImport: { stroke: "#f4c430", fill: "#2563eb",  text: "#ffffff" },
   } as const;
 
