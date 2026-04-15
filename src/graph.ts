@@ -210,10 +210,20 @@ export function buildGraphForFile(
     }
   }
 
-  // We'll add import nodes lazily — only once we know at least one decl in
-  // the file actually depends on them.
+  // We'll add import nodes lazily — only once we know at least one
+  // reference node in the file actually came from them.
   const usedImports = new Set<string>();
   const importEdges: { from: string; to: string }[] = [];
+
+  // Determine which import (if any) a given reference came from. Returns
+  // the first matching import so each ref edge-connects to one upstream.
+  const importForRef = (ref: string): string | undefined => {
+    for (const imp of fileImports) {
+      const fn = matchers.get(imp)!;
+      if (fn([ref])) return imp;
+    }
+    return undefined;
+  };
 
   for (let i = 0; i < rootDecls.length; i++) {
     const d = rootDecls[i]!;
@@ -224,11 +234,15 @@ export function buildGraphForFile(
 
     const level1 = refsFromBody(body).filter((r) => r !== d.name);
 
-    // Connect only the imports this decl actually references.
-    for (const imp of fileImports) {
-      if (matchers.get(imp)!(level1)) {
+    // For each ref, connect the import that provided it (if any) upstream
+    // of the ref node itself. This produces the layering
+    //   imports  →  refs  →  decls
+    // the user expects.
+    for (const r of level1) {
+      const imp = importForRef(r);
+      if (imp !== undefined) {
         usedImports.add(imp);
-        importEdges.push({ from: `import:${imp}`, to: d.name });
+        importEdges.push({ from: `import:${imp}`, to: r });
       }
     }
     for (const r of level1) {
