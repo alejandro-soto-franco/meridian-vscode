@@ -9,7 +9,7 @@ import {
   DashboardState, SorriesProvider, CoverageProvider, CommandsProvider,
   ingestSorryInventory, ingestGapReport, ingestCoverage, ingestCoverageBlocks,
 } from "./tree";
-import { GapsWebviewProvider } from "./gapsView";
+import { GapsPanel } from "./gapsView";
 import { scanFileForSorries, scanFileForDecls } from "./scanner";
 import { listProjectSorries, runProjectCoverage, friendlyRaw } from "./coverage";
 
@@ -24,12 +24,10 @@ export function activate(context: vscode.ExtensionContext) {
   const sorries = new SorriesProvider(dash);
   const coverage = new CoverageProvider(dash);
   const commandsView = new CommandsProvider();
-  const gapsView = new GapsWebviewProvider(context, resolveProject);
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider("meridian.sorries", sorries),
     vscode.window.registerTreeDataProvider("meridian.coverage", coverage),
     vscode.window.registerTreeDataProvider("meridian.commands", commandsView),
-    vscode.window.registerWebviewViewProvider(GapsWebviewProvider.viewType, gapsView),
   );
 
   // Register every catalog command.
@@ -50,6 +48,7 @@ export function activate(context: vscode.ExtensionContext) {
     }),
     vscode.commands.registerCommand("meridian.showOutput", () => output.show(true)),
     vscode.commands.registerCommand("meridian.coverageProject", () => runProjectCoverageCmd()),
+    vscode.commands.registerCommand("meridian.showGaps", () => GapsPanel.show(context, resolveProject)),
   );
 
   // Sidebar Sorries view: refresh on active editor change AND on save (current file only).
@@ -60,7 +59,7 @@ export function activate(context: vscode.ExtensionContext) {
     } else {
       dash.update({ sorries: scanFileForSorries(doc) });
     }
-    gapsView.refresh();
+    GapsPanel.current()?.refresh();
   };
   context.subscriptions.push(
     vscode.window.onDidChangeActiveTextEditor(refreshSorriesForActive),

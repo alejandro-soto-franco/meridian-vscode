@@ -57,7 +57,8 @@
       { "command": "meridian.refreshDashboard","title": "Refresh Dashboard",        "category": "Meridian", "icon": "$(refresh)" },
       { "command": "meridian.showResults",     "title": "Show Results Panel",       "category": "Meridian" },
       { "command": "meridian.showOutput",      "title": "Show Output Channel",      "category": "Meridian" },
-      { "command": "meridian.coverageProject", "title": "Mathlib Coverage (Whole Project)", "category": "Meridian" }
+      { "command": "meridian.coverageProject", "title": "Mathlib Coverage (Whole Project)", "category": "Meridian" },
+      { "command": "meridian.showGaps",        "title": "Show Mathlib Gaps",                "category": "Meridian" }
     ],
     "viewsContainers": {
       "activitybar": [
@@ -71,7 +72,6 @@
     "views": {
       "meridian": [
         { "id": "meridian.sorries",  "name": "Sorries"          },
-        { "id": "meridian.gaps",     "name": "Mathlib Gaps",     "type": "webview" },
         { "id": "meridian.coverage", "name": "Coverage"         },
         { "id": "meridian.commands", "name": "Commands"         }
       ]

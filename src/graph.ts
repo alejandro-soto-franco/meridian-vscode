@@ -23,7 +23,7 @@ export interface DeclRef {
 export interface GraphNode {
   id: string;
   label: string;
-  kind: "root" | "project" | "mathlib" | "std" | "unknown";
+  kind: "root" | "project" | "mathlib" | "std" | "unknown" | "import";
   file?: string;
   line?: number;
 }
@@ -91,11 +91,29 @@ export function buildGraphForFile(
   const lines = src.split(/\r?\n/);
   const rootDecls = scanLinesForDecls(lines);
 
+  // Parse `import Mathlib.X.Y` at the top of the file; these "flow into" every decl.
+  const importRe = /^\s*import\s+(Mathlib(?:\.[A-Za-z_][\w']*)+)\s*$/;
+  const mathlibImports: string[] = [];
+  for (const ln of lines) {
+    const m = importRe.exec(ln);
+    if (m) mathlibImports.push(m[1]!);
+    // Stop scanning once we hit any non-import, non-blank, non-comment line.
+    if (ln.trim().length && !/^\s*(import|--|\/-|$)/.test(ln) && !ln.startsWith("/-")) {
+      if (!importRe.test(ln)) break;
+    }
+  }
+
+  // Add Mathlib import nodes feeding into every decl in the file.
+  for (const imp of mathlibImports) {
+    addNode({ id: `import:${imp}`, label: imp, kind: "import" });
+  }
+
   for (let i = 0; i < rootDecls.length; i++) {
     const d = rootDecls[i]!;
     const end = i + 1 < rootDecls.length ? rootDecls[i + 1]!.line - 1 : lines.length;
     const body = lines.slice(d.line - 1, end).join("\n");
     addNode({ id: d.name, label: d.name, kind: "root", file: leanFile, line: d.line });
+    for (const imp of mathlibImports) addEdge(`import:${imp}`, d.name);
 
     const level1 = refsFromBody(body).filter((r) => r !== d.name);
     for (const r of level1) {
@@ -133,27 +151,28 @@ export function graphToDot(g: DepGraph): string {
   const esc = (s: string) => s.replace(/"/g, '\\"');
 
   // Palette: high-contrast on both light and dark VS Code backgrounds.
-  // Hollow rings with mid-grey text; root has a filled accent with white text.
   const PAL = {
     root:    { stroke: "#4c9aff", fill: "#4c9aff",  text: "#ffffff" },
     project: { stroke: "#8e9aaf", fill: "none",     text: "#4a5568" },
     mathlib: { stroke: "#e5a13a", fill: "none",     text: "#8a5a1c" },
     std:     { stroke: "#b48ead", fill: "none",     text: "#6b4a77" },
     unknown: { stroke: "#6c757d", fill: "none",     text: "#4a5568" },
+    import:  { stroke: "#e5a13a", fill: "#fff4e0",  text: "#8a5a1c" },
   } as const;
 
   const style = (n: GraphNode): string => {
     const p = PAL[n.kind];
     const fill = p.fill === "none" ? "transparent" : p.fill;
     return [
-      `shape=circle`,
-      `style="filled,setlinewidth(1.4)"`,
+      `shape=box`,
+      `style="filled,rounded,setlinewidth(1.2)"`,
       `fillcolor="${fill}"`,
       `color="${p.stroke}"`,
       `fontcolor="${p.text}"`,
-      `width=0.55`,
+      `height=0.26`,
+      `width=0`,
       `fixedsize=false`,
-      `margin="0.12,0.06"`,
+      `margin="0.10,0.04"`,
     ].join(", ");
   };
 
