@@ -120,25 +120,59 @@ export function buildGraphForFile(
   return { nodes: [...nodes.values()], edges, rootFile: leanFile };
 }
 
+// Keep labels compact: show only the terminal segment of the qualified name.
+// Full name stays in the tooltip (graphviz `tooltip=`).
+function shortLabel(name: string): string {
+  const parts = name.split(".");
+  if (parts.length <= 1) return name;
+  // Show last two segments if available — e.g. "Varifold.firstVariation".
+  return parts.slice(-2).join(".");
+}
+
 export function graphToDot(g: DepGraph): string {
   const esc = (s: string) => s.replace(/"/g, '\\"');
+
+  // Palette: high-contrast on both light and dark VS Code backgrounds.
+  // Hollow rings with mid-grey text; root has a filled accent with white text.
+  const PAL = {
+    root:    { stroke: "#4c9aff", fill: "#4c9aff",  text: "#ffffff" },
+    project: { stroke: "#8e9aaf", fill: "none",     text: "#4a5568" },
+    mathlib: { stroke: "#e5a13a", fill: "none",     text: "#8a5a1c" },
+    std:     { stroke: "#b48ead", fill: "none",     text: "#6b4a77" },
+    unknown: { stroke: "#6c757d", fill: "none",     text: "#4a5568" },
+  } as const;
+
   const style = (n: GraphNode): string => {
-    switch (n.kind) {
-      case "root":    return `shape=box, style="filled,bold", fillcolor="#3c6e71", fontcolor="white"`;
-      case "project": return `shape=ellipse, style=filled, fillcolor="#d9d9d9"`;
-      case "mathlib": return `shape=ellipse, style="filled,dashed", fillcolor="#f6c177", fontcolor="#3b2e1e"`;
-      case "std":     return `shape=ellipse, style="filled,dashed", fillcolor="#c4a7e7"`;
-      default:        return `shape=ellipse, style=dashed`;
-    }
+    const p = PAL[n.kind];
+    const fill = p.fill === "none" ? "transparent" : p.fill;
+    return [
+      `shape=circle`,
+      `style="filled,setlinewidth(1.4)"`,
+      `fillcolor="${fill}"`,
+      `color="${p.stroke}"`,
+      `fontcolor="${p.text}"`,
+      `width=0.55`,
+      `fixedsize=false`,
+      `margin="0.12,0.06"`,
+    ].join(", ");
   };
-  const lines: string[] = [`digraph G {`,
+
+  const lines: string[] = [
+    `digraph G {`,
     `  rankdir=LR;`,
     `  bgcolor="transparent";`,
-    `  node [fontname="Helvetica", fontsize=10];`,
-    `  edge [color="#888888", arrowsize=0.6];`,
+    `  splines=curved;`,
+    `  overlap=false;`,
+    `  ranksep=0.9;`,
+    `  nodesep=0.4;`,
+    `  pad=0.25;`,
+    `  node [fontname="CMU Sans Serif", fontsize=10, penwidth=1.3];`,
+    `  edge [color="#8e9aaf80", arrowsize=0.55, penwidth=0.9, arrowhead=vee];`,
   ];
   for (const n of g.nodes) {
-    lines.push(`  "${esc(n.id)}" [label="${esc(n.label)}", ${style(n)}];`);
+    lines.push(
+      `  "${esc(n.id)}" [label="${esc(shortLabel(n.label))}", tooltip="${esc(n.id)}", ${style(n)}];`,
+    );
   }
   for (const e of g.edges) {
     lines.push(`  "${esc(e.from)}" -> "${esc(e.to)}";`);

@@ -62,26 +62,69 @@ export class GapsWebviewProvider implements vscode.WebviewViewProvider {
   private render(dot: string, nodeMeta: Record<string, { file: string | null; line: number | null }>): string {
     const dotJson = JSON.stringify(dot);
     const metaJson = JSON.stringify(nodeMeta);
-    return `<!doctype html><html><head><meta charset="utf-8"><style>
-      :root { color-scheme: light dark; }
-      body { margin: 0; padding: 0; font-family: var(--vscode-font-family);
-             color: var(--vscode-foreground); background: var(--vscode-sideBar-background); }
-      #legend { padding: 6px 8px; font-size: 0.75rem; color: var(--vscode-descriptionForeground);
-                border-bottom: 1px solid var(--vscode-panel-border); display: flex; gap: 8px; flex-wrap: wrap; }
-      #legend span { display: inline-flex; align-items: center; gap: 4px; }
-      #legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
-      #graph { width: 100%; height: calc(100vh - 32px); overflow: auto; }
-      #graph svg { width: 100%; height: auto; }
-      #graph g.node { cursor: pointer; }
-      #graph g.node:hover ellipse, #graph g.node:hover polygon { filter: brightness(1.15); }
-      #empty { padding: 1rem; color: var(--vscode-descriptionForeground); }
+    return `<!doctype html><html><head><meta charset="utf-8">
+    <link rel="stylesheet" href="https://fonts.cdnfonts.com/css/cmu-sans-serif">
+    <style>
+      :root {
+        color-scheme: light dark;
+        --fg: var(--vscode-foreground);
+        --bg: var(--vscode-sideBar-background);
+        --muted: var(--vscode-descriptionForeground);
+        --border: var(--vscode-panel-border);
+        --cm: "CMU Sans Serif", "Latin Modern Sans", "Helvetica Neue", system-ui, sans-serif;
+      }
+      html, body { height: 100%; }
+      body {
+        margin: 0; padding: 0;
+        font-family: var(--cm);
+        font-feature-settings: "kern", "liga", "calt";
+        -webkit-font-smoothing: antialiased;
+        color: var(--fg); background: var(--bg);
+      }
+      #legend {
+        padding: 10px 14px;
+        font-size: 11px;
+        letter-spacing: 0.02em;
+        color: var(--muted);
+        border-bottom: 1px solid var(--border);
+        display: flex; gap: 14px; flex-wrap: wrap; align-items: center;
+      }
+      #legend span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+      #legend i {
+        width: 10px; height: 10px; border-radius: 50%;
+        display: inline-block; box-sizing: border-box;
+      }
+      #legend .root    { background: #4c9aff; }
+      #legend .project { border: 1.4px solid #8e9aaf; }
+      #legend .mathlib { border: 1.4px solid #e5a13a; }
+      #legend .std     { border: 1.4px solid #b48ead; }
+      #graph {
+        width: 100%;
+        height: calc(100vh - 38px);
+        overflow: auto;
+        padding: 12px 8px;
+        box-sizing: border-box;
+      }
+      #graph svg { width: 100%; height: auto; display: block; }
+      /* Font only — leave fill to the Graphviz-emitted attribute so root
+         labels keep their white-on-blue contrast. */
+      #graph svg text {
+        font-family: var(--cm) !important;
+        font-size: 11px !important;
+      }
+      /* Neuron-style edges: soft, slightly translucent curves */
+      #graph svg path { stroke-linecap: round; stroke-linejoin: round; }
+      #graph g.node { cursor: pointer; transition: transform 120ms ease; transform-origin: center; transform-box: fill-box; }
+      #graph g.node:hover { filter: drop-shadow(0 1px 4px rgba(76,154,255,.35)); }
+      #graph g.edge path { transition: stroke-opacity 120ms ease; }
+      #graph g.edge:hover path { stroke-opacity: 1; }
+      #empty { padding: 1rem; color: var(--muted); font-family: var(--cm); }
     </style></head><body>
       <div id="legend">
-        <span><i style="background:#3c6e71"></i>file decl</span>
-        <span><i style="background:#d9d9d9"></i>project ref</span>
-        <span><i style="background:#f6c177"></i>Mathlib</span>
-        <span><i style="background:#c4a7e7"></i>Std/Lean/Init</span>
-        <span><i style="background:#eee;border:1px dashed #888"></i>unknown</span>
+        <span><i class="root"></i>file decl</span>
+        <span><i class="project"></i>project</span>
+        <span><i class="mathlib"></i>Mathlib</span>
+        <span><i class="std"></i>Std / Lean</span>
       </div>
       <div id="graph"><div id="empty">rendering…</div></div>
       <script type="module">
@@ -93,6 +136,8 @@ export class GapsWebviewProvider implements vscode.WebviewViewProvider {
           const svg = gv.dot(${dotJson});
           const el = document.getElementById('graph');
           el.innerHTML = svg;
+
+          // Ensure every SVG <text> is readable over its parent shape.
           el.querySelectorAll('g.node').forEach((g) => {
             const t = g.querySelector('title');
             if (!t) return;
