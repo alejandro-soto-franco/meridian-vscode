@@ -274,7 +274,7 @@ export function graphToDot(g: DepGraph): string {
     const p = (n.kind === "project" || n.kind === "root") && n.status
       ? STATUS[n.status]
       : base;
-    const fill = p.fill === "none" ? "transparent" : p.fill;
+    const fill = p.fill;
     return [
       `shape=box`,
       `style="filled,rounded,setlinewidth(1.2)"`,
