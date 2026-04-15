@@ -167,7 +167,7 @@ export class GapsPanel {
       #legend .mathlib  { background: #ede9fe; border: 1.3px solid #7c3aed; }
       #legend .std      { background: #e5e7eb; border: 1.3px solid #4a5568; }
       #legend .import   { background: #f4c430; border: 1.3px solid #b8860b; }
-      #legend .mathlibImport { background: #ede9fe; border: 1.3px solid #b8860b; }
+      #legend .mathlibImport { background: #7c3aed; border: 1.3px solid #f4c430; }
 
       #viewport {
         position: relative;
