@@ -11,8 +11,11 @@ import {
 } from "./tree";
 
 const dash = new DashboardState();
+let output: vscode.OutputChannel;
 
 export function activate(context: vscode.ExtensionContext) {
+  output = vscode.window.createOutputChannel("Meridian");
+  context.subscriptions.push(output);
   // Sidebar views.
   const sorries = new SorriesProvider(dash);
   const gaps = new GapsProvider(dash);
@@ -107,6 +110,18 @@ async function runReport(context: vscode.ExtensionContext, title: string, comman
     { location: vscode.ProgressLocation.Notification, title: `Meridian: running ${command}`, cancellable: false },
     () => runScratch(lakeRoot, src),
   );
+
+  output.appendLine(`\n=== ${command} (lake root: ${lakeRoot}, import: ${rootImport}) ===`);
+  output.appendLine(`exit code: ${result.code}`);
+  output.appendLine(`--- scratch source ---\n${src}`);
+  output.appendLine(`--- stdout ---\n${result.stdout}`);
+  output.appendLine(`--- stderr ---\n${result.stderr}`);
+  if (!result.ok) {
+    vscode.window.showErrorMessage(
+      `Meridian: ${command} failed (exit ${result.code}). See "Meridian" output channel.`,
+      "Open Output",
+    ).then((c) => { if (c) output.show(); });
+  }
 
   const html = pickRenderer(command)(result.stderr, result.stdout);
   show(context, title, html);
