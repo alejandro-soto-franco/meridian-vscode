@@ -131,14 +131,14 @@ async function runReport(context: vscode.ExtensionContext, title: string, comman
   show(context, title, html);
 
   // Also feed the dashboard when relevant.
-  if (command === "#sorry_inventory") ingestSorryInventory(dash, result.stderr, result.stdout);
+  if (command === "#sorry_inventory_all") ingestSorryInventory(dash, result.stderr, result.stdout);
   if (command === "#gap_report")      ingestGapReport(dash, result.stderr, result.stdout);
   if (command === "#mathlib_coverage") ingestCoverage(dash, result.stderr, result.stdout);
 }
 
 function pickRenderer(command: string) {
   if (command === "#dep_graph") return renderDepGraph;
-  if (command === "#sorry_inventory") return renderSorryInventory;
+  if (command === "#sorry_inventory_all") return renderSorryInventory;
   if (command === "#gap_report") return renderGapReport;
   return (stderr: string, stdout: string) => renderRaw(command, stderr || stdout);
 }
@@ -161,7 +161,7 @@ async function refreshDashboard(context: vscode.ExtensionContext) {
   const activeModule = activePath ? pathToModule(lakeRoot, activePath) : undefined;
   const extra = activeModule ? [activeModule] : [];
   const [inv, gap] = await Promise.all([
-    runScratch(lakeRoot, buildReportSource(rootImport, "#sorry_inventory", undefined, extra)),
+    runScratch(lakeRoot, buildReportSource(rootImport, "#sorry_inventory_all", undefined, extra)),
     runScratch(lakeRoot, buildReportSource(rootImport, "#gap_report",      undefined, extra)),
   ]);
   ingestSorryInventory(dash, inv.stderr, inv.stdout);
