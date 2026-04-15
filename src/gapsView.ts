@@ -176,7 +176,10 @@ export class GapsPanel {
         overflow: auto;
         padding: 16px;
         box-sizing: border-box;
+        cursor: grab;
       }
+      #viewport.panning { cursor: grabbing; user-select: none; }
+      #viewport.panning #stage * { pointer-events: none; }
       #stage {
         transform-origin: 0 0;
         transition: transform 120ms ease;
@@ -304,7 +307,33 @@ export class GapsPanel {
         document.getElementById('zoomIn').onclick  = () => { scale = Math.min(scale * 1.2, 4); applyScale(); };
         document.getElementById('zoomOut').onclick = () => { scale = Math.max(scale / 1.2, 0.25); applyScale(); };
         document.getElementById('zoomReset').onclick = () => { scale = 1; applyScale(); };
-        document.getElementById('viewport').addEventListener('wheel', (e) => {
+        // ---------------- pan (drag blank space) ----------------
+        const viewport = document.getElementById('viewport');
+        let panning = false, panStartX = 0, panStartY = 0, panStartScrollL = 0, panStartScrollT = 0;
+        viewport.addEventListener('mousedown', (ev) => {
+          // Only pan when the mousedown lands on empty canvas — not on a node
+          // or edge (SVG elements), not on the zoom/legend chrome.
+          const t = ev.target;
+          if (t.closest && (t.closest('g.node') || t.closest('g.edge') || t.closest('#zoom') || t.closest('#legend') || t.closest('#edgeInfo'))) return;
+          if (ev.button !== 0) return;
+          panning = true;
+          viewport.classList.add('panning');
+          panStartX = ev.clientX; panStartY = ev.clientY;
+          panStartScrollL = viewport.scrollLeft; panStartScrollT = viewport.scrollTop;
+          ev.preventDefault();
+        });
+        window.addEventListener('mousemove', (ev) => {
+          if (!panning) return;
+          viewport.scrollLeft = panStartScrollL - (ev.clientX - panStartX);
+          viewport.scrollTop  = panStartScrollT - (ev.clientY - panStartY);
+        });
+        window.addEventListener('mouseup', () => {
+          if (!panning) return;
+          panning = false;
+          viewport.classList.remove('panning');
+        });
+
+        viewport.addEventListener('wheel', (e) => {
           if (!e.ctrlKey && !e.metaKey) return;
           e.preventDefault();
           scale = Math.max(0.25, Math.min(4, scale * (e.deltaY < 0 ? 1.1 : 1/1.1)));
