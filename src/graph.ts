@@ -535,8 +535,8 @@ export function graphToDot(g: DepGraph): string {
   const PAL = {
     root:    { stroke: "#4c9aff", fill: "#4c9aff",  text: "#ffffff" },
     project: { stroke: "#8e9aaf", fill: "#ffffff",  text: "#2e3440" },
-    mathlib: { stroke: "#4a5568", fill: "#cbd5e0",  text: "#000000" },
-    std:     { stroke: "#b48ead", fill: "#ffffff",  text: "#6b4a77" },
+    mathlib: { stroke: "#7c3aed", fill: "#ede9fe",  text: "#4c1d95" },
+    std:     { stroke: "#4a5568", fill: "#e5e7eb",  text: "#1f2937" },
     unknown: { stroke: "#6c757d", fill: "#ffffff",  text: "#2d3748" },
     import:  { stroke: "#b8860b", fill: "#f4c430",  text: "#3a2900" },
   } as const;

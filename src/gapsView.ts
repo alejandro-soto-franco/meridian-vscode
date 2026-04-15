@@ -164,8 +164,8 @@ export class GapsPanel {
       #legend .complete { background: #f0fdf4; border: 1.3px solid #2f855a; }
       #legend .partial  { background: #fffbeb; border: 1.3px solid #b7791f; }
       #legend .stub     { background: #7f1d1d; border: 1.3px solid #c53030; }
-      #legend .mathlib  { background: #cbd5e0; border: 1.3px solid #4a5568; }
-      #legend .std      { background: #ffffff; border: 1.3px solid #b48ead; }
+      #legend .mathlib  { background: #ede9fe; border: 1.3px solid #7c3aed; }
+      #legend .std      { background: #e5e7eb; border: 1.3px solid #4a5568; }
       #legend .import   { background: #f4c430; border: 1.3px solid #b8860b; }
 
       #viewport {
