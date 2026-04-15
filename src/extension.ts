@@ -76,8 +76,11 @@ export function activate(context: vscode.ExtensionContext) {
   );
   refreshSorriesForActive();
 
-  // Optional: run #mathlib_coverage project-wide on activation.
-  if (vscode.workspace.getConfiguration("meridian").get<boolean>("coverageOnStartup", false)) {
+  const cfg = vscode.workspace.getConfiguration("meridian");
+  if (cfg.get<boolean>("gapsOnStartup", true)) {
+    GapsPanel.show(context, resolveProject);
+  }
+  if (cfg.get<boolean>("coverageOnStartup", false)) {
     runProjectCoverageCmd().catch((e) => output.appendLine(`startup coverage failed: ${e}`));
   }
 }
