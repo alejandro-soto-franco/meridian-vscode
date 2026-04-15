@@ -295,19 +295,22 @@ export function buildGraphForFile(
     }
   }
 
-  // Materialise only the imports that something in the file actually used.
-  for (const imp of usedImports) {
-    if (imp === "Mathlib" || imp.startsWith("Mathlib.")) {
+  // Mathlib imports always show (even with no resolved refs) so the gold
+  // column reflects what the file is actually pulling in. Project-local
+  // imports only appear when at least one ref resolved to them — the
+  // short-name resolution covers the common cases, and showing every
+  // unused project import would just crowd the graph.
+  for (const imp of fileImports) {
+    const isMathlib = imp === "Mathlib" || imp.startsWith("Mathlib.");
+    if (isMathlib) {
       addNode({ id: `import:${imp}`, label: imp, kind: "import" });
-    } else {
+    } else if (usedImports.has(imp)) {
       const status = aggregateModuleStatus(imp, projectIdx);
       addNode({ id: `import:${imp}`, label: imp, kind: "project", status });
     }
   }
   for (const e of importEdges) {
-    if (usedImports.has(e.from.replace(/^import:/, ""))) {
-      addEdge(e.from, e.to);
-    }
+    addEdge(e.from, e.to);
   }
 
   return { nodes: [...nodes.values()], edges, rootFile: leanFile };
