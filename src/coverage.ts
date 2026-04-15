@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { buildReportSource, pathToModule, runScratch } from "./runner";
 import { stripLeanNoise } from "./parser";
+import { scanLinesForSorriesWithDecl } from "./scanner";
 
 export interface CoverageBlock {
   decl: string;
@@ -37,23 +38,21 @@ export function listProjectModules(lakeRoot: string, rootImport: string): { modu
   return out;
 }
 
-// Build a scratch buffer that imports every project module and asks Meridian
-// for its full sorry inventory. We parse the result to extract qualified names.
-export async function listProjectSorries(
+// Walk the filesystem to find every sorry and the fully-qualified declaration
+// it lives in. Far more reliable than asking Meridian from a scratch buffer
+// (which hangs on large projects).
+export function listProjectSorries(
   lakeRoot: string,
   rootImport: string,
-  token?: vscode.CancellationToken,
-): Promise<string[]> {
+): string[] {
   const modules = listProjectModules(lakeRoot, rootImport);
-  const src = buildReportSource(rootImport, "#sorry_inventory_all", undefined, modules.map((m) => m.module));
-  const res = await runScratch(lakeRoot, src, { token, timeoutMs: 1_800_000 });
-  const text = stripLeanNoise(res.stderr + "\n" + res.stdout);
   const names = new Set<string>();
-  // The inventory format is loose; pull anything that looks like a fully-qualified Lean ident.
-  for (const m of text.matchAll(/(?:^|\s|·|\[|->)([A-Z][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_']*)+)/g)) {
-    const n = m[1]!;
-    if (!n.startsWith("Mathlib.") && !n.startsWith("Std.") && !n.startsWith("Lean.")) {
-      names.add(n);
+  for (const { file } of modules) {
+    let src: string;
+    try { src = fs.readFileSync(file, "utf8"); } catch { continue; }
+    const lines = src.split(/\r?\n/);
+    for (const hit of scanLinesForSorriesWithDecl(lines)) {
+      if (hit.decl) names.add(hit.decl);
     }
   }
   return [...names].sort();

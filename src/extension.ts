@@ -208,8 +208,8 @@ async function runProjectCoverageCmd() {
   await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Notification, title: "Meridian: project-wide Mathlib coverage", cancellable: true },
     async (progress, token) => {
-      progress.report({ message: "scanning sorries…" });
-      const decls = await listProjectSorries(lakeRoot, rootImport, token);
+      progress.report({ message: "scanning project files for sorries…" });
+      const decls = listProjectSorries(lakeRoot, rootImport);
       output.appendLine(`\n=== project coverage: ${decls.length} sorry-bearing decls ===`);
       for (const d of decls) output.appendLine(`  ${d}`);
       if (token.isCancellationRequested) return;
