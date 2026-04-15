@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { CATALOG, find } from "./catalog";
-import { buildReportSource, findLakeRoot, guessRootImport, runScratch } from "./runner";
+import { buildReportSource, findLakeRoot, guessRootImport, pathToModule, runScratch } from "./runner";
 import {
   renderDepGraph, renderSorryInventory, renderGapReport, renderRaw, show,
 } from "./webview";
@@ -105,7 +105,9 @@ async function runReport(context: vscode.ExtensionContext, title: string, comman
     if (!arg) return;
   }
 
-  const src = buildReportSource(rootImport, command, arg);
+  const activePath = vscode.window.activeTextEditor?.document.uri.fsPath;
+  const activeModule = activePath ? pathToModule(lakeRoot, activePath) : undefined;
+  const src = buildReportSource(rootImport, command, arg, activeModule ? [activeModule] : []);
   const result = await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Notification, title: `Meridian: running ${command}`, cancellable: false },
     () => runScratch(lakeRoot, src),
@@ -153,9 +155,12 @@ async function refreshDashboard(context: vscode.ExtensionContext) {
   const { lakeRoot, rootImport } = resolveProject();
   if (!lakeRoot) return;
 
+  const activePath = vscode.window.activeTextEditor?.document.uri.fsPath;
+  const activeModule = activePath ? pathToModule(lakeRoot, activePath) : undefined;
+  const extra = activeModule ? [activeModule] : [];
   const [inv, gap] = await Promise.all([
-    runScratch(lakeRoot, buildReportSource(rootImport, "#sorry_inventory")),
-    runScratch(lakeRoot, buildReportSource(rootImport, "#gap_report")),
+    runScratch(lakeRoot, buildReportSource(rootImport, "#sorry_inventory", undefined, extra)),
+    runScratch(lakeRoot, buildReportSource(rootImport, "#gap_report",      undefined, extra)),
   ]);
   ingestSorryInventory(dash, inv.stderr, inv.stdout);
   ingestGapReport(dash, gap.stderr, gap.stdout);

@@ -68,11 +68,23 @@ export async function runScratch(
   });
 }
 
-export function buildReportSource(rootImport: string, command: string, arg?: string): string {
+export function buildReportSource(rootImport: string, command: string, arg?: string, extra?: string[]): string {
   const line = arg ? `${command} ${arg}` : command;
-  return `import ${rootImport}
-import Meridian
+  const seen = new Set<string>();
+  const imports = ["Meridian", rootImport, ...(extra ?? [])]
+    .filter((m) => m && !seen.has(m) && (seen.add(m), true))
+    .map((m) => `import ${m}`)
+    .join("\n");
+  return `${imports}
 
 ${line}
 `;
+}
+
+// Convert an absolute .lean path inside `lakeRoot` into its module name.
+// e.g. /…/Meridian/Meridian/Domain/GMT/FirstVariation.lean → "Meridian.Domain.GMT.FirstVariation"
+export function pathToModule(lakeRoot: string, leanFile: string): string | undefined {
+  const rel = path.relative(lakeRoot, leanFile);
+  if (rel.startsWith("..") || !rel.endsWith(".lean")) return undefined;
+  return rel.slice(0, -".lean".length).split(path.sep).join(".");
 }
