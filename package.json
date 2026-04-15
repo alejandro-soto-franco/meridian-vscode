@@ -55,7 +55,8 @@
       { "command": "meridian.helicity",        "title": "Helicity Tactic",          "category": "Meridian" },
       { "command": "meridian.openDashboard",   "title": "Open Dashboard",           "category": "Meridian" },
       { "command": "meridian.refreshDashboard","title": "Refresh Dashboard",        "category": "Meridian", "icon": "$(refresh)" },
-      { "command": "meridian.showResults",     "title": "Show Results Panel",       "category": "Meridian" }
+      { "command": "meridian.showResults",     "title": "Show Results Panel",       "category": "Meridian" },
+      { "command": "meridian.showOutput",      "title": "Show Output Channel",      "category": "Meridian" }
     ],
     "viewsContainers": {
       "activitybar": [

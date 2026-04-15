@@ -16,6 +16,7 @@ let output: vscode.OutputChannel;
 export function activate(context: vscode.ExtensionContext) {
   output = vscode.window.createOutputChannel("Meridian");
   context.subscriptions.push(output);
+  output.appendLine(`Meridian extension activated at ${new Date().toISOString()}`);
   // Sidebar views.
   const sorries = new SorriesProvider(dash);
   const gaps = new GapsProvider(dash);
@@ -44,6 +45,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand("meridian.showResults", () => {
       show(context, "Results", renderRaw("Results", "(no command run yet)"));
     }),
+    vscode.commands.registerCommand("meridian.showOutput", () => output.show(true)),
   );
 
   // Auto-refresh on save.
