@@ -45,6 +45,11 @@ export function listProjectSorries(
   lakeRoot: string,
   rootImport: string,
 ): string[] {
+  const ignore = vscode.workspace
+    .getConfiguration("meridian")
+    .get<string[]>("coverageIgnorePrefixes", []);
+  const isIgnored = (n: string) =>
+    ignore.some((p) => n === p || n.startsWith(p + "."));
   const modules = listProjectModules(lakeRoot, rootImport);
   const names = new Set<string>();
   for (const { file } of modules) {
@@ -52,7 +57,7 @@ export function listProjectSorries(
     try { src = fs.readFileSync(file, "utf8"); } catch { continue; }
     const lines = src.split(/\r?\n/);
     for (const hit of scanLinesForSorriesWithDecl(lines)) {
-      if (hit.decl) names.add(hit.decl);
+      if (hit.decl && !isIgnored(hit.decl)) names.add(hit.decl);
     }
   }
   return [...names].sort();

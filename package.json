@@ -105,6 +105,12 @@
           "type": "boolean",
           "default": false,
           "description": "Run #mathlib_coverage across every sorry in the project on extension activation. First run is slow (builds a Mathlib DiscrTree)."
+        },
+        "meridian.coverageIgnorePrefixes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["Meridian.Core", "Meridian.Search", "Meridian.Analysis"],
+          "description": "Declarations whose fully-qualified name starts with any of these prefixes are excluded from project-wide Mathlib coverage. Defaults to Meridian's meta-infrastructure (non-mathematical tactics/metaprogramming)."
         }
       }
     }
