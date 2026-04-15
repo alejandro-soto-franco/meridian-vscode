@@ -235,7 +235,7 @@ async function runProjectCoverageCmd() {
         return;
       }
       progress.report({ message: `running coverage on ${decls.length} decls (first run builds Mathlib DiscrTree, can take minutes)` });
-      const blocks = await runProjectCoverage(lakeRoot, rootImport, decls, token);
+      const blocks = await runProjectCoverage(lakeRoot, rootImport, decls, token, (m) => output.appendLine(m));
       output.appendLine(`coverage parsed: ${blocks.length} blocks`);
       ingestCoverageBlocks(dash, blocks);
       vscode.window.showInformationMessage(`Meridian: coverage populated for ${blocks.length} declarations.`);

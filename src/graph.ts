@@ -130,8 +130,25 @@ export function refsFromBody(body: string): string[] {
   for (const m of body.matchAll(QUAL_IDENT)) {
     const n = m[1]!;
     if (LEAN_RESERVED.has(n)) continue;
-    // Skip attribute names like @[simp] (regex already skips single-ident attrs, but be safe).
     out.add(n);
+  }
+  return [...out];
+}
+
+// Qualified refs plus bare identifiers that resolve to short names in
+// `shortNameToFqn`. Useful because after `open Foo` or inside `namespace Foo`,
+// users call symbols without qualifying them.
+const BARE_IDENT = /\b([A-Za-z_][\w']*)\b/g;
+export function refsFromBodyWithShortResolution(
+  body: string,
+  shortNameToFqn: Map<string, string>,
+): string[] {
+  const out = new Set<string>(refsFromBody(body));
+  for (const m of body.matchAll(BARE_IDENT)) {
+    const n = m[1]!;
+    if (LEAN_RESERVED.has(n)) continue;
+    const fqn = shortNameToFqn.get(n);
+    if (fqn) out.add(fqn);
   }
   return [...out];
 }
@@ -158,6 +175,13 @@ export function buildGraphForFile(
   };
 
   const projectIdx = indexProjectDecls(lakeRoot, rootImport);
+  // Short-name → FQN map. If a short name is ambiguous (multiple FQNs), the
+  // last one wins; that's an acceptable compromise for a visualization.
+  const shortToFqn = new Map<string, string>();
+  for (const [name] of projectIdx) {
+    const last = name.split(".").pop();
+    if (last) shortToFqn.set(last, name);
+  }
   const src = fs.readFileSync(leanFile, "utf8");
   const lines = src.split(/\r?\n/);
   const rootDecls = scanLinesForDecls(lines);
@@ -232,7 +256,7 @@ export function buildGraphForFile(
     const status = classifyBody(body);
     addNode({ id: d.name, label: d.name, kind: "root", file: leanFile, line: d.line, status });
 
-    const level1 = refsFromBody(body).filter((r) => r !== d.name);
+    const level1 = refsFromBodyWithShortResolution(body, shortToFqn).filter((r) => r !== d.name);
 
     // For each ref, connect the import that provided it (if any) upstream
     // of the ref node itself. This produces the layering
@@ -260,7 +284,7 @@ export function buildGraphForFile(
       // Expand level 2 only for project refs. Level-2 refs feed into the
       // level-1 ref, so the arrow goes upstream (leftward) too.
       if (kind === "project" && l1Info) {
-        const level2 = refsFromBody(l1Info.body).filter((r2) => r2 !== r);
+        const level2 = refsFromBodyWithShortResolution(l1Info.body, shortToFqn).filter((r2) => r2 !== r);
         for (const r2 of level2) {
           const k2 = classifyRef(r2, rootImport);
           const l2Info = projectIdx.get(r2);
@@ -365,7 +389,8 @@ export function graphToDot(g: DepGraph): string {
     `  edge [color="#8e9aaf80", arrowsize=0.55, penwidth=0.9, arrowhead=vee, tailport=e, headport=w];`,
   ];
   const imports = g.nodes.filter((n) => n.kind === "import");
-  const others  = g.nodes.filter((n) => n.kind !== "import");
+  const roots   = g.nodes.filter((n) => n.kind === "root");
+  const middle  = g.nodes.filter((n) => n.kind !== "import" && n.kind !== "root");
   const nodeIdFor = (i: number) => `n${i}`;
   const nodeIndex = new Map<string, number>();
   g.nodes.forEach((n, i) => nodeIndex.set(n.id, i));
@@ -375,12 +400,20 @@ export function graphToDot(g: DepGraph): string {
     return `"${esc(n.id)}" [id="${nodeIdFor(idx)}", label="${plainLabel(n.label)}", tooltip="${esc(n.id)}", ${style(n)}];`;
   };
 
-  for (const n of others) {
-    lines.push(`  ${emit(n)}`);
-  }
+  // Middle layer: refs (project / mathlib / std / unknown).
+  for (const n of middle) lines.push(`  ${emit(n)}`);
+
+  // Left-most: import nodes pinned to rank=source.
   if (imports.length) {
-    lines.push(`  subgraph cluster_imports { rank=source; style=invis;`);
+    lines.push(`  { rank=source;`);
     for (const n of imports) lines.push(`    ${emit(n)}`);
+    lines.push(`  }`);
+  }
+  // Right-most: file decls pinned to rank=sink so they never share a column
+  // with refs or imports, even when they have no incoming edges.
+  if (roots.length) {
+    lines.push(`  { rank=sink;`);
+    for (const n of roots) lines.push(`    ${emit(n)}`);
     lines.push(`  }`);
   }
   for (let i = 0; i < g.edges.length; i++) {

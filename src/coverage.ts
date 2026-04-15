@@ -70,12 +70,19 @@ export async function runProjectCoverage(
   rootImport: string,
   decls: string[],
   token?: vscode.CancellationToken,
+  log?: (msg: string) => void,
 ): Promise<CoverageBlock[]> {
   if (decls.length === 0) return [];
   const modules = listProjectModules(lakeRoot, rootImport).map((m) => m.module);
   const lines = decls.map((d) => `#mathlib_coverage ${d}`).join("\n");
   const src = buildReportSource(rootImport, lines, undefined, modules);
   const res = await runScratch(lakeRoot, src, { token, timeoutMs: 1_800_000 });
+  if (log) {
+    log(`coverage scratch exit=${res.code}`);
+    log(`--- scratch source ---\n${src}`);
+    log(`--- stdout ---\n${res.stdout}`);
+    log(`--- stderr ---\n${res.stderr}`);
+  }
   return parseCoverageBatch(res.stderr + "\n" + res.stdout);
 }
 
