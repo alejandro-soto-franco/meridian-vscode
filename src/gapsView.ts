@@ -172,10 +172,14 @@ export class GapsPanel {
         width: max-content;
       }
       #stage svg { display: block; }
-      /* Do not force a single font-family here — Graphviz emits per-span
-         <text font-family="Latin Modern Mono"> and "Latin Modern Sans" inside
-         HTML-like labels, and we want those to win. Only set fallback size. */
-      #stage svg text { font-size: 10px !important; }
+      /* Plain labels: Graphviz emits font-family="Courier" in the SVG for
+         metric-accurate node sizing, but we render with Latin Modern Mono.
+         The webfont is very close to Courier in advance widths, so boxes
+         don't overflow. */
+      #stage svg text {
+        font-family: var(--lmmono) !important;
+        font-size: 10px !important;
+      }
       #stage svg path { stroke-linecap: round; stroke-linejoin: round; }
       #stage g.node { cursor: pointer; transition: opacity 150ms ease; }
       #stage g.node:hover { filter: drop-shadow(0 1px 4px rgba(76,154,255,.35)); }

@@ -151,11 +151,14 @@ export function buildGraphForFile(
 // Latin Modern Sans and the terminal declaration name in Latin Modern Mono.
 // Returns the full label expression including the surrounding angle brackets.
 // (Graphviz HTML-like labels: https://graphviz.org/doc/info/shapes.html#html)
-function htmlLabel(name: string): string {
+// Compact label: last two segments of a qualified name. Plain (non-HTML)
+// label so Graphviz can size the node using its built-in Courier metrics,
+// which closely match Latin Modern Mono. The browser overrides the actual
+// SVG text font-family via CSS (see gapsView.ts).
+function plainLabel(name: string): string {
   const parts = name.split(".");
-  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const short = parts.length <= 2 ? name : parts.slice(-2).join(".");
-  return `<<FONT FACE="Latin Modern Mono">${esc(short)}</FONT>>`;
+  return short.replace(/"/g, '\\"');
 }
 
 export function graphToDot(g: DepGraph): string {
@@ -198,21 +201,24 @@ export function graphToDot(g: DepGraph): string {
     `  ranksep=0.9;`,
     `  nodesep=0.4;`,
     `  pad=0.25;`,
-    `  node [fontname="Latin Modern Mono", fontsize=10, penwidth=1.3];`,
+    // Graphviz sizes nodes using this font's metrics. Courier is built-in
+    // and close enough in glyph width to Latin Modern Mono that the boxes
+    // end up a bit wider than strictly needed, which is what we want.
+    `  node [fontname="Courier", fontsize=10, penwidth=1.3];`,
     `  edge [color="#8e9aaf80", arrowsize=0.55, penwidth=0.9, arrowhead=vee];`,
   ];
   const imports = g.nodes.filter((n) => n.kind === "import");
   const others  = g.nodes.filter((n) => n.kind !== "import");
   for (const n of others) {
     lines.push(
-      `  "${esc(n.id)}" [label=${htmlLabel(n.label)}, tooltip="${esc(n.id)}", ${style(n)}];`,
+      `  "${esc(n.id)}" [label="${plainLabel(n.label)}", tooltip="${esc(n.id)}", ${style(n)}];`,
     );
   }
   if (imports.length) {
     lines.push(`  subgraph cluster_imports { rank=source; style=invis;`);
     for (const n of imports) {
       lines.push(
-        `    "${esc(n.id)}" [label=${htmlLabel(n.label)}, tooltip="${esc(n.id)}", ${style(n)}];`,
+        `    "${esc(n.id)}" [label="${plainLabel(n.label)}", tooltip="${esc(n.id)}", ${style(n)}];`,
       );
     }
     lines.push(`  }`);
