@@ -1,0 +1,119 @@
+{
+  "name": "meridian-vscode",
+  "displayName": "Meridian",
+  "description": "VS Code integration for Meridian: Lean 4 metaprogramming toolkit (sorries, dep graphs, Mathlib coverage, PDE/GMT tactics).",
+  "version": "0.1.0",
+  "publisher": "alejandro-soto-franco",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alejandro-soto-franco/meridian-vscode"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other",
+    "Programming Languages",
+    "Visualization"
+  ],
+  "keywords": [
+    "lean",
+    "lean4",
+    "meridian",
+    "mathlib",
+    "theorem proving"
+  ],
+  "activationEvents": [
+    "onLanguage:lean4",
+    "workspaceContains:**/lakefile.toml",
+    "workspaceContains:**/lakefile.lean"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "meridian.sorryExtract",    "title": "Meridian: Insert #sorry_extract",    "category": "Meridian" },
+      { "command": "meridian.depGraph",        "title": "Meridian: Dependency Graph",         "category": "Meridian" },
+      { "command": "meridian.sorryInventory",  "title": "Meridian: Sorry Inventory",          "category": "Meridian" },
+      { "command": "meridian.extractTheorems", "title": "Meridian: Extract Theorems",         "category": "Meridian" },
+      { "command": "meridian.verifyProof",     "title": "Meridian: Verify Proof…",            "category": "Meridian" },
+      { "command": "meridian.theorem2sorry",   "title": "Meridian: Theorem → Sorry",          "category": "Meridian" },
+      { "command": "meridian.normalize",       "title": "Meridian: Normalize",                "category": "Meridian" },
+      { "command": "meridian.rename",          "title": "Meridian: Rename…",                  "category": "Meridian" },
+      { "command": "meridian.disprove",        "title": "Meridian: Disprove…",                "category": "Meridian" },
+      { "command": "meridian.suggest",         "title": "Meridian: Suggest Tactic",           "category": "Meridian" },
+      { "command": "meridian.search",          "title": "Meridian: Proof Search (IDA*)",      "category": "Meridian" },
+      { "command": "meridian.decompose",       "title": "Meridian: Decompose Goal",           "category": "Meridian" },
+      { "command": "meridian.instanceDebug",   "title": "Meridian: Instance Debug…",          "category": "Meridian" },
+      { "command": "meridian.mathlibCoverage", "title": "Meridian: Mathlib Coverage…",        "category": "Meridian" },
+      { "command": "meridian.gapReport",       "title": "Meridian: Gap Report",               "category": "Meridian" },
+      { "command": "meridian.distrib",         "title": "Meridian: Distributional Tactic",    "category": "Meridian" },
+      { "command": "meridian.sobolev",         "title": "Meridian: Sobolev Exponent Tactic",  "category": "Meridian" },
+      { "command": "meridian.biotSavart",      "title": "Meridian: Biot–Savart Tactic",       "category": "Meridian" },
+      { "command": "meridian.connection",      "title": "Meridian: Connection Tactic",        "category": "Meridian" },
+      { "command": "meridian.curvature",       "title": "Meridian: Curvature Tactic",         "category": "Meridian" },
+      { "command": "meridian.helicity",        "title": "Meridian: Helicity Tactic",          "category": "Meridian" },
+      { "command": "meridian.openDashboard",   "title": "Meridian: Open Dashboard",           "category": "Meridian" },
+      { "command": "meridian.refreshDashboard","title": "Meridian: Refresh Dashboard",        "category": "Meridian", "icon": "$(refresh)" },
+      { "command": "meridian.showResults",     "title": "Meridian: Show Results Panel",       "category": "Meridian" }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "meridian",
+          "title": "Meridian",
+          "icon": "resources/meridian.svg"
+        }
+      ]
+    },
+    "views": {
+      "meridian": [
+        { "id": "meridian.sorries",  "name": "Sorries"          },
+        { "id": "meridian.gaps",     "name": "Mathlib Gaps"     },
+        { "id": "meridian.coverage", "name": "Coverage"         },
+        { "id": "meridian.commands", "name": "Commands"         }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        { "command": "meridian.refreshDashboard", "when": "view == meridian.sorries",  "group": "navigation" },
+        { "command": "meridian.refreshDashboard", "when": "view == meridian.gaps",     "group": "navigation" },
+        { "command": "meridian.refreshDashboard", "when": "view == meridian.coverage", "group": "navigation" }
+      ]
+    },
+    "configuration": {
+      "title": "Meridian",
+      "properties": {
+        "meridian.lakeExecutable": {
+          "type": "string",
+          "default": "lake",
+          "description": "Path to the `lake` executable."
+        },
+        "meridian.autoRefreshOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Refresh dashboard when a Lean file is saved."
+        },
+        "meridian.heartbeats": {
+          "type": "number",
+          "default": 400000,
+          "description": "Default heartbeats for meridian_search."
+        }
+      }
+    }
+  },
+  "extensionDependencies": [
+    "leanprover.lean4"
+  ],
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -w -p ./",
+    "lint": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.4.0"
+  }
+}
