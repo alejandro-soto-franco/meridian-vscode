@@ -152,11 +152,12 @@ export class GapsPanel {
       }
       #legend span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
       #legend i { width: 12px; height: 8px; border-radius: 2px; display: inline-block; box-sizing: border-box; }
-      #legend .root    { background: #4c9aff; }
-      #legend .project { border: 1.3px solid #8e9aaf; }
-      #legend .mathlib { border: 1.3px solid #e5a13a; }
-      #legend .std     { border: 1.3px solid #b48ead; }
-      #legend .import  { background: #fff4e0; border: 1.3px solid #e5a13a; }
+      #legend .complete { background: #c6f6d5; border: 1.3px solid #2f855a; }
+      #legend .partial  { background: #fef3c7; border: 1.3px solid #b7791f; }
+      #legend .stub     { background: #742a2a; border: 1.3px solid #9b2c2c; }
+      #legend .mathlib  { background: #cbd5e0; border: 1.3px solid #4a5568; }
+      #legend .std      { border: 1.3px solid #b48ead; }
+      #legend .import   { background: #f4c430; border: 1.3px solid #b8860b; }
 
       #viewport {
         position: relative;
@@ -172,12 +173,12 @@ export class GapsPanel {
         width: max-content;
       }
       #stage svg { display: block; }
-      /* Plain labels: Graphviz emits font-family="Courier" in the SVG for
-         metric-accurate node sizing, but we render with Latin Modern Mono.
-         The webfont is very close to Courier in advance widths, so boxes
-         don't overflow. */
+      /* Render SVG text with the VS Code editor font so it matches the
+         editor across themes and is legible at any zoom level. Graphviz
+         still sized the nodes using Courier's advance widths, and the
+         editor font's mono metrics are close enough that the boxes fit. */
       #stage svg text {
-        font-family: var(--lmmono) !important;
+        font-family: var(--vscode-editor-font-family, ui-monospace, "SF Mono", Menlo, Consolas, monospace) !important;
         font-size: 10px !important;
       }
       #stage svg path { stroke-linecap: round; stroke-linejoin: round; }
@@ -239,8 +240,9 @@ export class GapsPanel {
     </style></head><body>
       <div id="legend">
         <span><i class="import"></i>import</span>
-        <span><i class="root"></i>file decl</span>
-        <span><i class="project"></i>project</span>
+        <span><i class="complete"></i>complete</span>
+        <span><i class="partial"></i>partial</span>
+        <span><i class="stub"></i>stub</span>
         <span><i class="mathlib"></i>Mathlib</span>
         <span><i class="std"></i>Std / Lean</span>
       </div>

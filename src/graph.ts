@@ -20,12 +20,18 @@ export interface DeclRef {
   refs: string[];        // qualified identifiers referenced in its body
 }
 
+// "complete" = decl has no sorry anywhere.
+// "partial"  = decl body has some work AND at least one sorry.
+// "stub"     = decl body is effectively just `sorry` (or `by sorry`).
+export type DeclStatus = "complete" | "partial" | "stub";
+
 export interface GraphNode {
   id: string;
   label: string;
   kind: "root" | "project" | "mathlib" | "std" | "unknown" | "import";
   file?: string;
   line?: number;
+  status?: DeclStatus;
 }
 
 export interface GraphEdge { from: string; to: string; }
@@ -36,9 +42,51 @@ export interface DepGraph {
   rootFile: string;
 }
 
-// Collect { decl -> {file, line, body} } for the whole project, once.
-export function indexProjectDecls(lakeRoot: string, rootImport: string): Map<string, { file: string; line: number; body: string }> {
-  const idx = new Map<string, { file: string; line: number; body: string }>();
+export interface DeclIndexEntry {
+  file: string;
+  line: number;
+  body: string;
+  status: DeclStatus;
+}
+
+// Classify a decl body as complete / partial / stub.
+// stub = the proof position is literally `sorry` (possibly behind `by`) with
+// no other tactics. partial = has a sorry but also other non-trivial content.
+// complete = no sorry found at all.
+export function classifyBody(body: string): DeclStatus {
+  // Strip -- line comments and /- ... -/ block comments.
+  let cleaned = body.replace(/\/-[\s\S]*?-\//g, " ");
+  cleaned = cleaned.split(/\r?\n/).map((l) => {
+    const i = l.indexOf("--");
+    return i === -1 ? l : l.slice(0, i);
+  }).join("\n");
+
+  const hasSorry = /\bsorry\b/.test(cleaned);
+  if (!hasSorry) return "complete";
+
+  // Extract the proof/value part: everything after the first ` := ` or ` by `.
+  const afterAssign = cleaned.match(/:=([\s\S]*)$/);
+  const afterBy     = cleaned.match(/\bby\b([\s\S]*)$/);
+  const tail = (afterAssign?.[1] ?? afterBy?.[1] ?? cleaned).trim();
+
+  // Strip a leading `by` if present.
+  const proof = tail.replace(/^by\b\s*/, "").trim();
+
+  // Count tactics / terms by splitting on common separators.
+  const tokens = proof
+    .split(/[\s\n;·•]+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0 && t !== "by");
+
+  // Stub if the only non-trivial token is `sorry` (possibly with punctuation).
+  const nonSorry = tokens.filter((t) => t !== "sorry" && t !== "sorry;");
+  if (nonSorry.length === 0) return "stub";
+  return "partial";
+}
+
+// Collect project-wide decl index with status classification.
+export function indexProjectDecls(lakeRoot: string, rootImport: string): Map<string, DeclIndexEntry> {
+  const idx = new Map<string, DeclIndexEntry>();
   for (const { file } of listProjectModules(lakeRoot, rootImport)) {
     let src: string;
     try { src = fs.readFileSync(file, "utf8"); } catch { continue; }
@@ -48,7 +96,7 @@ export function indexProjectDecls(lakeRoot: string, rootImport: string): Map<str
       const d = decls[i]!;
       const endLine = i + 1 < decls.length ? decls[i + 1]!.line - 1 : lines.length;
       const body = lines.slice(d.line - 1, endLine).join("\n");
-      idx.set(d.name, { file, line: d.line, body });
+      idx.set(d.name, { file, line: d.line, body, status: classifyBody(body) });
     }
   }
   return idx;
@@ -121,7 +169,8 @@ export function buildGraphForFile(
     const d = rootDecls[i]!;
     const end = i + 1 < rootDecls.length ? rootDecls[i + 1]!.line - 1 : lines.length;
     const body = lines.slice(d.line - 1, end).join("\n");
-    addNode({ id: d.name, label: d.name, kind: "root", file: leanFile, line: d.line });
+    const status = classifyBody(body);
+    addNode({ id: d.name, label: d.name, kind: "root", file: leanFile, line: d.line, status });
     for (const imp of fileImports) addEdge(`import:${imp}`, d.name);
 
     const level1 = refsFromBody(body).filter((r) => r !== d.name);
@@ -131,13 +180,18 @@ export function buildGraphForFile(
       addNode({ id: r, label: r, kind, file: l1Info?.file, line: l1Info?.line });
       addEdge(d.name, r);
 
+      // Attach status to the level-1 node if it's a project decl we indexed.
+      if (kind === "project" && l1Info) {
+        nodes.get(r)!.status = l1Info.status;
+      }
+
       // Expand level 2 only for project refs.
       if (kind === "project" && l1Info) {
         const level2 = refsFromBody(l1Info.body).filter((r2) => r2 !== r);
         for (const r2 of level2) {
           const k2 = classifyRef(r2, rootImport);
           const l2Info = projectIdx.get(r2);
-          addNode({ id: r2, label: r2, kind: k2, file: l2Info?.file, line: l2Info?.line });
+          addNode({ id: r2, label: r2, kind: k2, file: l2Info?.file, line: l2Info?.line, status: l2Info?.status });
           addEdge(r, r2);
         }
       }
@@ -164,20 +218,30 @@ function plainLabel(name: string): string {
 export function graphToDot(g: DepGraph): string {
   const esc = (s: string) => s.replace(/"/g, '\\"');
 
-  // Palette: high-contrast on both light and dark VS Code backgrounds.
-  // Imports get a saturated gold treatment so they read clearly as the
-  // Mathlib surface flowing into the file.
+  // Status palette: these drive project + root decl colors.
+  // complete → green, partial → yellow, stub → dark red with white text.
+  const STATUS = {
+    complete: { stroke: "#2f855a", fill: "#c6f6d5", text: "#22543d" },
+    partial:  { stroke: "#b7791f", fill: "#fef3c7", text: "#744210" },
+    stub:     { stroke: "#9b2c2c", fill: "#742a2a", text: "#ffffff" },
+  } as const;
+
+  // Kind-keyed defaults for everything else.
   const PAL = {
     root:    { stroke: "#4c9aff", fill: "#4c9aff",  text: "#ffffff" },
-    project: { stroke: "#8e9aaf", fill: "none",     text: "#4a5568" },
-    mathlib: { stroke: "#d4a017", fill: "none",     text: "#8a5a1c" },
+    project: { stroke: "#8e9aaf", fill: "#eceff4",  text: "#2e3440" },
+    mathlib: { stroke: "#4a5568", fill: "#cbd5e0",  text: "#000000" },
     std:     { stroke: "#b48ead", fill: "none",     text: "#6b4a77" },
     unknown: { stroke: "#6c757d", fill: "none",     text: "#4a5568" },
     import:  { stroke: "#b8860b", fill: "#f4c430",  text: "#3a2900" },
   } as const;
 
   const style = (n: GraphNode): string => {
-    const p = PAL[n.kind];
+    const base = PAL[n.kind];
+    // Status coloring wins for project/root decls when we have a classification.
+    const p = (n.kind === "project" || n.kind === "root") && n.status
+      ? STATUS[n.status]
+      : base;
     const fill = p.fill === "none" ? "transparent" : p.fill;
     return [
       `shape=box`,
