@@ -48,6 +48,8 @@ export class GapsPanel {
           ed.selection = new vscode.Selection(pos, pos);
           ed.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
         }
+      } else if (m?.type === "togglePalette") {
+        await vscode.commands.executeCommand("meridian.togglePalette");
       }
     }, null, this.disposables);
     panel.onDidDispose(() => this.dispose(), null, this.disposables);
@@ -77,7 +79,8 @@ export class GapsPanel {
       this.panel.webview.html = this.shell("No declarations found in this file.");
       return;
     }
-    const dot = graphToDot(graph);
+    const paletteMode = vscode.workspace.getConfiguration("meridian").get<string>("colorPalette", "default") as "default" | "cvd-safe";
+    const dot = graphToDot(graph, paletteMode);
     const nodeMeta = Object.fromEntries(
       graph.nodes.map((n) => [n.id, { file: n.file ?? null, line: n.line ?? null, kind: n.kind, label: n.label }]),
     );
@@ -93,7 +96,7 @@ export class GapsPanel {
       adjacency[e.to]?.edges.push(edgeId);
     }
     this.panel.title = `Dependency Graph: ${filePath.split("/").pop()}`;
-    this.panel.webview.html = this.render(dot, nodeMeta, adjacency, nodeIds, edgeIds);
+    this.panel.webview.html = this.render(dot, nodeMeta, adjacency, nodeIds, edgeIds, paletteMode);
   }
 
   private dispose(): void {
@@ -123,6 +126,7 @@ export class GapsPanel {
     adjacency: Record<string, { neighbours: string[]; edges: string[] }>,
     nodeIds: Record<string, string>,
     edgeIds: Record<string, { from: string; to: string; count: number; uses: Array<{ line: number; kind: string }> }>,
+    palette: "default" | "cvd-safe",
   ): string {
     const dotJson = JSON.stringify(dot);
     const metaJson = JSON.stringify(nodeMeta);
@@ -161,13 +165,30 @@ export class GapsPanel {
       }
       #legend span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
       #legend i { width: 12px; height: 8px; border-radius: 2px; display: inline-block; box-sizing: border-box; }
-      #legend .complete { background: #f0fdf4; border: 1.3px solid #2f855a; }
-      #legend .partial  { background: #fffbeb; border: 1.3px solid #b7791f; }
-      #legend .stub     { background: #7f1d1d; border: 1.3px solid #c53030; }
-      #legend .mathlib  { background: #ede9fe; border: 1.3px solid #7c3aed; }
-      #legend .std      { background: #e5e7eb; border: 1.3px solid #4a5568; }
-      #legend .import   { background: #c2410c; border: 1.3px solid #f4c430; }
-      #legend .mathlibImport { background: #2563eb; border: 1.3px solid #f4c430; }
+      #legend .complete.default { background: #86efac; border: 1.3px solid #15803d; }
+      #legend .partial.default  { background: #fcd34d; border: 1.3px solid #b45309; }
+      #legend .stub.default     { background: #7f1d1d; border: 1.3px solid #b91c1c; }
+      #legend .complete.cvd     { background: #cfe4f5; border: 1.3px solid #0077BB; }
+      #legend .partial.cvd      { background: #f5d9a7; border: 1.3px solid #BB6622; }
+      #legend .stub.cvd         { background: #7a2e00; border: 1.3px solid #EE7733; }
+      #legend .mathlib          { background: #f0d9e6; border: 1.3px solid #AA3377; }
+      #legend .std              { background: #e5e7eb; border: 1.3px solid #4a5568; }
+      #legend .import           { background: #c2410c; border: 1.3px solid #f4c430; }
+      #legend .mathlibImport    { background: #2563eb; border: 1.3px solid #f4c430; }
+      #paletteToggle {
+        margin-left: auto;
+        font-family: var(--cm);
+        font-size: 10.5px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        padding: 3px 10px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+      }
+      #paletteToggle:hover { background: var(--vscode-list-hoverBackground); color: var(--fg); }
 
       #viewport {
         position: relative;
@@ -268,11 +289,12 @@ export class GapsPanel {
       <div id="legend">
         <span><i class="mathlibImport"></i>Mathlib import</span>
         <span><i class="import"></i>import</span>
-        <span><i class="complete"></i>complete</span>
-        <span><i class="partial"></i>partial</span>
-        <span><i class="stub"></i>stub</span>
+        <span><i class="complete ${palette === "cvd-safe" ? "cvd" : "default"}"></i>complete</span>
+        <span><i class="partial ${palette === "cvd-safe" ? "cvd" : "default"}"></i>partial</span>
+        <span><i class="stub ${palette === "cvd-safe" ? "cvd" : "default"}"></i>stub</span>
         <span><i class="mathlib"></i>Mathlib</span>
         <span><i class="std"></i>Std / Lean</span>
+        <button id="paletteToggle" title="Toggle color palette">${palette === "cvd-safe" ? "CVD-safe" : "default"}</button>
       </div>
       <div id="viewport"><div id="stage"><div style="padding:1rem;color:var(--muted)">rendering…</div></div></div>
       <div id="zoom">
@@ -295,6 +317,12 @@ export class GapsPanel {
         const adjacency = ${adjJson};
         const nodeIds = ${nodeIdsJson};
         const edgeIds = ${edgeIdsJson};
+
+        const paletteBtn = document.getElementById('paletteToggle');
+        if (paletteBtn) paletteBtn.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          vscode.postMessage({ type: 'togglePalette' });
+        });
 
         // ---------------- zoom ----------------
         const stage = document.getElementById('stage');

@@ -75,6 +75,13 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand("meridian.showOutput", () => output.show(true)),
     vscode.commands.registerCommand("meridian.coverageProject", () => runProjectCoverageCmd()),
     vscode.commands.registerCommand("meridian.showGaps", () => GapsPanel.show(context, resolveProject)),
+    vscode.commands.registerCommand("meridian.togglePalette", async () => {
+      const cfg = vscode.workspace.getConfiguration("meridian");
+      const current = cfg.get<string>("colorPalette", "default");
+      const next = current === "cvd-safe" ? "default" : "cvd-safe";
+      await cfg.update("colorPalette", next, vscode.ConfigurationTarget.Global);
+      GapsPanel.current()?.refresh();
+    }),
   );
 
   // Sidebar Sorries view: refresh on active editor change AND on save (current file only).

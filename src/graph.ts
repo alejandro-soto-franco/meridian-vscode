@@ -523,23 +523,33 @@ function plainLabel(name: string): string {
   return short.replace(/"/g, '\\"');
 }
 
-export function graphToDot(g: DepGraph): string {
+export function graphToDot(g: DepGraph, palette: "default" | "cvd-safe" = "default"): string {
   const esc = (s: string) => s.replace(/"/g, '\\"');
 
-  // Status palette: drives project + root decl colors, and also non-Mathlib
-  // imports (whose status is aggregated from their module's decls).
-  const STATUS = {
+  // Two palettes. 'default' is traffic-light semantics. 'cvd-safe' swaps
+  // red/green for blue/orange so the complete → partial → stub progression
+  // stays decipherable under red/green colour-vision deficiency.
+  const STATUS_DEFAULT = {
     complete: { stroke: "#15803d", fill: "#86efac", text: "#14532d" },
     partial:  { stroke: "#b45309", fill: "#fcd34d", text: "#78350f" },
     stub:     { stroke: "#b91c1c", fill: "#7f1d1d", text: "#ffffff" },
   } as const;
+  const STATUS_CVD = {
+    complete: { stroke: "#0077BB", fill: "#cfe4f5", text: "#003e66" },
+    partial:  { stroke: "#BB6622", fill: "#f5d9a7", text: "#4a2a00" },
+    stub:     { stroke: "#EE7733", fill: "#7a2e00", text: "#ffffff" },
+  } as const;
+  const STATUS = palette === "cvd-safe" ? STATUS_CVD : STATUS_DEFAULT;
 
-  // Kind-keyed defaults for everything else. All fills are near-white so
-  // the labels stay readable on a dark theme.
+  // Role palette. Mathlib / Std / imports keep the same colours in both
+  // modes (they don't overlap red/green). The root anchor swaps to a
+  // deep indigo in CVD mode so it doesn't collide with the blue complete.
   const PAL = {
-    root:    { stroke: "#4c9aff", fill: "#4c9aff",  text: "#ffffff" },
+    root:    palette === "cvd-safe"
+      ? { stroke: "#332288", fill: "#332288", text: "#ffffff" }
+      : { stroke: "#4c9aff", fill: "#4c9aff", text: "#ffffff" },
     project: { stroke: "#8e9aaf", fill: "#ffffff",  text: "#2e3440" },
-    mathlib: { stroke: "#7c3aed", fill: "#ede9fe",  text: "#4c1d95" },
+    mathlib: { stroke: "#AA3377", fill: "#f0d9e6",  text: "#55143b" },
     std:     { stroke: "#4a5568", fill: "#e5e7eb",  text: "#1f2937" },
     unknown: { stroke: "#6c757d", fill: "#ffffff",  text: "#2d3748" },
     import:        { stroke: "#f4c430", fill: "#c2410c",  text: "#ffffff" },

@@ -70,7 +70,8 @@
       { "command": "meridian.showResults",     "title": "Show Results Panel",       "category": "Meridian" },
       { "command": "meridian.showOutput",      "title": "Show Output Channel",      "category": "Meridian" },
       { "command": "meridian.coverageProject", "title": "Mathlib Coverage (Whole Project)", "category": "Meridian" },
-      { "command": "meridian.showGaps",        "title": "Show Dependency Graph",            "category": "Meridian" }
+      { "command": "meridian.showGaps",        "title": "Show Dependency Graph",            "category": "Meridian" },
+      { "command": "meridian.togglePalette",   "title": "Toggle Color Palette (default / CVD-safe)", "category": "Meridian" }
     ],
     "viewsContainers": {
       "activitybar": [
@@ -122,6 +123,12 @@
           "type": "boolean",
           "default": true,
           "description": "Auto-open the Dependency Graph panel beside the editor on activation."
+        },
+        "meridian.colorPalette": {
+          "type": "string",
+          "enum": ["default", "cvd-safe"],
+          "default": "default",
+          "description": "Color palette for the Dependency Graph. 'default' uses a traffic-light scheme (red/yellow/green) with Paul Tol accents. 'cvd-safe' swaps red/green for blue/orange so red-green colorblind users keep the semantic progression."
         },
         "meridian.coverageIgnorePrefixes": {
           "type": "array",
