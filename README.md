@@ -1,41 +1,64 @@
-# meridian-vscode
+# Meridian for VS Code
 
-VS Code integration for [Meridian](https://github.com/alejandro-soto-franco/Meridian), a Lean 4 metaprogramming toolkit for proof search, sorry extraction, dependency analysis, Mathlib coverage, and PDE/GMT domain tactics.
+**A live dependency graph, sorry inventory, and Mathlib coverage view for any Lean 4 project.**
 
-Runs locally. No network calls, no hosted API, no data leaves your machine.
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](./LICENSE)
+[![VS Code](https://img.shields.io/badge/VS%20Code-%5E1.85-007ACC.svg?logo=visualstudiocode)](https://code.visualstudio.com/)
+
+Meridian gives you an interactive map of how the declarations in your current file depend on the rest of the project and on Mathlib. Colour-coded by proof status. Runs entirely on your machine. No network calls, no hosted API, no telemetry.
+
+---
 
 ## Features
 
-**Command palette** (all commands prefixed `Meridian:`):
+### Live dependency graph
 
-- **Core:** Sorry Inventory, Sorry Extract, Extract Theorems, Dependency Graph, Verify Proof, Theorem → Sorry, Normalize, Rename, Disprove
-- **Search:** Suggest Tactic, Proof Search (IDA*), Decompose Goal, Instance Debug
-- **Analysis:** Mathlib Coverage, Gap Report
-- **PDE:** Distributional, Sobolev, Biot–Savart, Connection, Curvature, Helicity
-- **GMT:** definitions and statement-level theorems from `Meridian.Domain.GMT`
+Open any `.lean` file and a panel beside the editor renders its 2-hop dependency graph:
 
-Insert-style commands drop the right snippet at your cursor. Report-style commands run `lake env lean` on a scratch file, capture output, and render it.
+- **Gold imports** on the left column (direct imports the file actually uses).
+- **Blue-and-gold Mathlib imports** for Mathlib files providing referenced symbols, including transitive ones resolved through a full-project Mathlib index.
+- **Purple Mathlib refs** in the middle column.
+- **Green / yellow / red status nodes** for project declarations, coloured by whether they're complete, partial, or pure `sorry` stubs.
+- **Grey Std / Lean refs** kept visually recessed.
 
-**Results webview** renders:
+Click to focus a node and light up its incident edges; double-click to jump to the source. Click an edge for a pill showing from → to, usage count, and every line where the reference appears — tagged as **signature** (type-level, harder to refactor) or **body / proof** (value-level, easier).
 
-- `#dep_graph` → interactive SVG via `@hpcc-js/wasm` Graphviz
-- `#sorry_inventory` → sortable, filterable table with jump-to-definition
-- `#gap_report` → sortable, filterable Mathlib gap table
-- Anything else → raw, denoised Lean output
+### Status at a glance
 
-**Sidebar dashboard** (activity bar → Meridian):
+Each declaration body is classified:
 
-- **Sorries** — project-wide, click to jump
-- **Mathlib Gaps** — near-miss candidates
-- **Coverage** — last `#mathlib_coverage` output
-- **Commands** — browsable, self-documenting catalog
+- ✅ **complete** — no `sorry` anywhere
+- ⚠ **partial** — some proof work plus at least one `sorry`
+- ⛔ **stub** — nothing but `sorry`
 
-Auto-refreshes on save (disable via `meridian.autoRefreshOnSave`).
+Module-level status propagates to import edges, so a dependency chain that bottoms out in an unfinished module is visible from the top of the file.
+
+### Sorry inventory
+
+The sidebar **Sorries** panel lists every `sorry` in the active file with line numbers and jump-to-definition, refreshed on every edit. Comment-aware so block- and line-comments don't produce false positives.
+
+### Mathlib coverage
+
+Run `Meridian: Mathlib Coverage (Whole Project)` and every sorry-bearing declaration is scanned for near-misses against the Mathlib `DiscrTree`. Results land in the **Coverage** sidebar tree: each declaration collapses to show exact matches and near-misses with gap-kind classification. Runs once per Lean process, amortising the 300 k-entry tree build.
+
+Coverage categories map to user-facing labels:
+
+| Meridian category | Label |
+|---|---|
+| A | **Available** |
+| B | **Partially Available** |
+| C | **Not Available** |
+
+### Command palette
+
+Every Meridian `#` command and tactic is surfaced: `#sorry_inventory`, `#dep_graph`, `#mathlib_coverage`, `meridian_search`, `meridian_distrib`, `meridian_biot_savart`, `meridian_curvature`, and more. Report-style commands open a webview with sortable tables or an interactive Graphviz render; tactic-style commands insert the snippet at the cursor.
+
+---
 
 ## Requirements
 
-- [Lean 4 VS Code extension](https://marketplace.visualstudio.com/items?itemName=leanprover.lean4) (installed automatically as a dependency)
-- A Lake project with Meridian listed in `lakefile.toml`:
+- [Lean 4 VS Code extension](https://marketplace.visualstudio.com/items?itemName=leanprover.lean4) — installed automatically as a dependency.
+- A Lake project. The dependency graph works in any Lake project. Coverage, Gap Report, and Sorry Inventory (palette version) additionally require [Meridian](https://github.com/alejandro-soto-franco/Meridian) as a Lake dependency:
 
   ```toml
   [[require]]
@@ -44,22 +67,71 @@ Auto-refreshes on save (disable via `meridian.autoRefreshOnSave`).
   rev = "main"
   ```
 
+---
+
+## Getting started
+
+1. Install the extension.
+2. Open a Lean 4 project in VS Code.
+3. Click the compass icon in the activity bar.
+4. Open any `.lean` file — the **Dependency Graph** panel auto-opens beside the editor.
+5. On first graph render the extension walks `.lake/packages/mathlib/Mathlib/**/*.lean` once to build the Mathlib symbol index (typically 2–5 s, cached for the session).
+
+### Interacting with the graph
+
+| Action | Gesture |
+|---|---|
+| Focus a node | single-click |
+| Open source | double-click |
+| Clear focus | click empty canvas |
+| Inspect an edge | single-click |
+| Pan | click-and-drag empty canvas |
+| Zoom | +/− buttons bottom-right, or Ctrl/Cmd + wheel |
+| Reset zoom | ⊙ button |
+
+---
+
 ## Settings
 
 | Setting | Default | Description |
 |---|---|---|
-| `meridian.lakeExecutable`    | `lake`   | Path to the Lake binary |
-| `meridian.autoRefreshOnSave` | `true`   | Refresh dashboard on Lean save |
-| `meridian.heartbeats`        | `400000` | Default `meridian_search` heartbeats |
+| `meridian.lakeExecutable` | `lake` | Path to Lake binary. |
+| `meridian.autoRefreshOnSave` | `true` | Re-scan on Lean save. |
+| `meridian.heartbeats` | `400000` | Default for `meridian_search`. |
+| `meridian.depGraphOnStartup` | `true` | Auto-open the Dependency Graph panel. |
+| `meridian.coverageOnStartup` | `true` | Run project coverage at activation. |
+| `meridian.coverageIgnorePrefixes` | `["Meridian.Core", "Meridian.Search", "Meridian.Analysis"]` | Skip these namespaces when running project coverage. |
 
-## Build
+---
 
-```bash
-npm install
-npm run compile
-```
+## Diagnostics
 
-Then F5 in VS Code to launch an Extension Development Host.
+- **`Meridian: Show Output Channel`** opens the extension's log (lake root, root import, Meridian dependency detection, every scratch source and its Lean output).
+- The same log mirrors to `~/.meridian-vscode.log` so it's inspectable without opening VS Code.
+
+---
+
+## Design
+
+Meridian never calls the network. The dependency graph scanner reads source files directly. Coverage and inventory commands shell out to `lake env lean` on a temporary scratch buffer inside your project; output stays on your machine. No analytics, no remote APIs, no account required.
+
+---
+
+## Roadmap
+
+- Type signature hover tooltips on decl nodes.
+- Shift-click "blast radius" view: everything transitively dependent on a node.
+- Configurable graph depth slider.
+- Search / filter within the graph panel.
+- SVG / PNG export.
+
+---
+
+## Contributing
+
+Issues and PRs welcome at [github.com/alejandro-soto-franco/meridian-vscode](https://github.com/alejandro-soto-franco/meridian-vscode). For core Meridian features (tactics, commands) see the upstream [Meridian repo](https://github.com/alejandro-soto-franco/Meridian).
+
+---
 
 ## License
 

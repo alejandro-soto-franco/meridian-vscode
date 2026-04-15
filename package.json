@@ -1,28 +1,40 @@
 {
   "name": "meridian-vscode",
   "displayName": "Meridian",
-  "description": "VS Code integration for Meridian: Lean 4 metaprogramming toolkit (sorries, dep graphs, Mathlib coverage, PDE/GMT tactics).",
+  "description": "Interactive dependency graph, sorry inventory, and Mathlib coverage for Lean 4 projects. Zero network calls, all local.",
   "version": "0.1.0",
   "publisher": "alejandro-soto-franco",
   "license": "Apache-2.0",
+  "icon": "resources/icon.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/alejandro-soto-franco/meridian-vscode"
   },
+  "bugs": {
+    "url": "https://github.com/alejandro-soto-franco/meridian-vscode/issues"
+  },
+  "homepage": "https://github.com/alejandro-soto-franco/meridian-vscode#readme",
   "engines": {
     "vscode": "^1.85.0"
   },
+  "galleryBanner": {
+    "color": "#1a1f2e",
+    "theme": "dark"
+  },
   "categories": [
-    "Other",
+    "Visualization",
     "Programming Languages",
-    "Visualization"
+    "Other"
   ],
   "keywords": [
     "lean",
     "lean4",
-    "meridian",
     "mathlib",
-    "theorem proving"
+    "theorem proving",
+    "dependency graph",
+    "formalization",
+    "metaprogramming",
+    "meridian"
   ],
   "activationEvents": [
     "onLanguage:lean4",
