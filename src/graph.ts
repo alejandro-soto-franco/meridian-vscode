@@ -34,7 +34,13 @@ export interface GraphNode {
   status?: DeclStatus;
 }
 
-export interface GraphEdge { from: string; to: string; count: number; }
+export interface EdgeUse { line: number; kind: "signature" | "proof"; }
+export interface GraphEdge {
+  from: string;
+  to: string;
+  count: number;
+  uses?: EdgeUse[];
+}
 
 export interface DepGraph {
   nodes: GraphNode[];
@@ -140,6 +146,47 @@ export function indexProjectDecls(lakeRoot: string, rootImport: string): Map<str
   return idx;
 }
 
+// Find the first `:=` at the outermost text level, returning its line index
+// within the body (0-based). Anything before is treated as signature/type
+// level; anything at or after is proof/value level. Best-effort: uses
+// comment-stripping but no paren-balance heuristics.
+export function proofStartLine(body: string): number | undefined {
+  const lines = body.split(/\r?\n/);
+  let inBlock = false;
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i]!;
+    // Block comments first.
+    if (inBlock) {
+      const end = line.indexOf("-/");
+      if (end === -1) continue;
+      line = line.slice(end + 2);
+      inBlock = false;
+    }
+    // Strip block + line comments.
+    const parts: string[] = [];
+    let j = 0;
+    while (j < line.length) {
+      const start = line.indexOf("/-", j);
+      const cmt = line.indexOf("--", j);
+      if (cmt !== -1 && (start === -1 || cmt < start)) { parts.push(line.slice(j, cmt)); j = line.length; }
+      else if (start !== -1) {
+        parts.push(line.slice(j, start));
+        const close = line.indexOf("-/", start + 2);
+        if (close === -1) { inBlock = true; j = line.length; }
+        else { j = close + 2; }
+      } else {
+        parts.push(line.slice(j));
+        j = line.length;
+      }
+    }
+    const cleaned = parts.join("");
+    // Match `:=` with either a leading space (so we don't catch `name :=` inside
+    // let-bindings) or at start of line.
+    if (/(^|\s):=(\s|$)/.test(cleaned)) return i;
+  }
+  return undefined;
+}
+
 // Aggregate decl-level statuses to a module-level status.
 // all complete → complete; all stub → stub; mixed or any partial → partial.
 export function aggregateModuleStatus(
@@ -212,14 +259,18 @@ export function buildGraphForFile(
   leanFile: string,
 ): DepGraph {
   const nodes = new Map<string, GraphNode>();
-  const edgeCount = new Map<string, { from: string; to: string; count: number }>();
+  const edgeCount = new Map<string, { from: string; to: string; count: number; uses: EdgeUse[] }>();
   const addNode = (n: GraphNode) => { if (!nodes.has(n.id)) nodes.set(n.id, n); };
-  const addEdge = (from: string, to: string) => {
+  const addEdge = (from: string, to: string, uses?: EdgeUse[]) => {
     if (from === to) return;
     const k = `${from}->${to}`;
     const e = edgeCount.get(k);
-    if (e) e.count++;
-    else edgeCount.set(k, { from, to, count: 1 });
+    if (e) {
+      e.count++;
+      if (uses) e.uses.push(...uses);
+    } else {
+      edgeCount.set(k, { from, to, count: 1, uses: uses ?? [] });
+    }
   };
 
   const projectIdx = indexProjectDecls(lakeRoot, rootImport);
@@ -352,6 +403,30 @@ export function buildGraphForFile(
 
     const level1 = refsFromBodyWithShortResolution(body, shortToFqn).filter((r) => r !== d.name);
 
+    // Per-ref usage locations: find each occurrence of the ref (or its
+    // short-name synonym, when the file calls it unqualified) on each line,
+    // and tag it signature vs proof based on first `:=` split.
+    const bodyLines = body.split(/\r?\n/);
+    const split = proofStartLine(body);
+    const useLocationsFor = (ref: string): EdgeUse[] => {
+      const tokens = new Set<string>();
+      tokens.add(ref);
+      const short = ref.split(".").pop();
+      if (short) tokens.add(short);
+      const patterns = [...tokens].map((t) => new RegExp(`\\b${t.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}\\b`));
+      const out: EdgeUse[] = [];
+      for (let j = 0; j < bodyLines.length; j++) {
+        const ln = bodyLines[j]!;
+        if (patterns.some((re) => re.test(ln))) {
+          out.push({
+            line: d.line + j,
+            kind: split === undefined || j < split ? "signature" : "proof",
+          });
+        }
+      }
+      return out;
+    };
+
     // For each ref, connect the import that provided it (if any) upstream
     // of the ref node itself. This produces the layering
     //   imports  →  refs  →  decls
@@ -367,8 +442,8 @@ export function buildGraphForFile(
       const kind = classifyRef(r, rootImport);
       const l1Info = projectIdx.get(r);
       addNode({ id: r, label: r, kind, file: l1Info?.file, line: l1Info?.line });
-      // Upstream flow: the ref feeds into the decl.
-      addEdge(r, d.name);
+      // Upstream flow: the ref feeds into the decl. Record usage locations.
+      addEdge(r, d.name, useLocationsFor(r));
 
       // Attach status to the level-1 node if it's a project decl we indexed.
       if (kind === "project" && l1Info) {
@@ -423,7 +498,11 @@ export function buildGraphForFile(
     addEdge(e.from, e.to);
   }
 
-  return { nodes: [...nodes.values()], edges: [...edgeCount.values()], rootFile: leanFile };
+  return {
+    nodes: [...nodes.values()],
+    edges: [...edgeCount.values()].map((e) => ({ from: e.from, to: e.to, count: e.count, uses: e.uses })),
+    rootFile: leanFile,
+  };
 }
 
 // Build a Graphviz HTML-like label that renders the namespace segment in
@@ -542,11 +621,11 @@ export function graphToDot(g: DepGraph): string {
 
 // Parallel mappings so the webview can wire up focus / click handlers
 // without parsing fragile SVG title text.
-export function edgeIdMap(g: DepGraph): Record<string, { from: string; to: string; count: number }> {
-  const m: Record<string, { from: string; to: string; count: number }> = {};
+export function edgeIdMap(g: DepGraph): Record<string, { from: string; to: string; count: number; uses: EdgeUse[] }> {
+  const m: Record<string, { from: string; to: string; count: number; uses: EdgeUse[] }> = {};
   for (let i = 0; i < g.edges.length; i++) {
     const e = g.edges[i]!;
-    m[`e${i}`] = { from: e.from, to: e.to, count: e.count };
+    m[`e${i}`] = { from: e.from, to: e.to, count: e.count, uses: e.uses ?? [] };
   }
   return m;
 }

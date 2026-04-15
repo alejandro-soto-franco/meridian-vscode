@@ -122,7 +122,7 @@ export class GapsPanel {
     nodeMeta: Record<string, { file: string | null; line: number | null; kind: string; label: string }>,
     adjacency: Record<string, { neighbours: string[]; edges: string[] }>,
     nodeIds: Record<string, string>,
-    edgeIds: Record<string, { from: string; to: string; count: number }>,
+    edgeIds: Record<string, { from: string; to: string; count: number; uses: Array<{ line: number; kind: string }> }>,
   ): string {
     const dotJson = JSON.stringify(dot);
     const metaJson = JSON.stringify(nodeMeta);
@@ -254,6 +254,11 @@ export class GapsPanel {
       #edgeInfo .from, #edgeInfo .to { color: var(--vscode-textLink-foreground); cursor: pointer; }
       #edgeInfo .kind { color: var(--muted); margin-left: 6px; font-style: italic; }
       #edgeInfo .close { float: right; cursor: pointer; color: var(--muted); margin-left: 10px; }
+      #edgeInfo .uses { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; font-size: 10.5px; }
+      #edgeInfo .use { cursor: pointer; padding: 1px 7px; border-radius: 9px; border: 1px solid var(--border); }
+      #edgeInfo .use.signature { border-color: #4c9aff; color: #4c9aff; }
+      #edgeInfo .use.proof     { border-color: #8e9aaf; color: var(--muted); }
+      #edgeInfo .use:hover { background: var(--vscode-list-hoverBackground); }
     </style></head><body>
       <div id="legend">
         <span><i class="import"></i>import</span>
@@ -276,6 +281,7 @@ export class GapsPanel {
         <span>&nbsp;&rarr;&nbsp;</span>
         <span class="to" id="edgeTo"></span>
         <span class="kind" id="edgeKind"></span>
+        <div class="uses" id="edgeUses"></div>
       </div>
       <script type="module">
         const vscode = acquireVsCodeApi();
@@ -411,6 +417,30 @@ export class GapsPanel {
                 const m = meta[to];
                 if (m && m.file) vscode.postMessage({ type: 'openFile', file: m.file, line: m.line });
               };
+              // Per-use chips: each line where the ref appears in the decl,
+              // labelled signature (type-level) or proof (value-level). Click
+              // a chip to jump to that line in the source file.
+              const usesHost = document.getElementById('edgeUses');
+              usesHost.innerHTML = '';
+              const toMeta = meta[to];
+              const targetFile = toMeta && toMeta.file;
+              const uses = e.uses || [];
+              if (!uses.length) {
+                usesHost.innerHTML = '<span style="color:var(--muted);font-style:italic">no line info</span>';
+              } else {
+                for (const u of uses) {
+                  const chip = document.createElement('span');
+                  chip.className = 'use ' + u.kind;
+                  chip.textContent = u.kind + ' · L' + u.line;
+                  if (targetFile) {
+                    chip.onclick = (inner) => {
+                      inner.stopPropagation();
+                      vscode.postMessage({ type: 'openFile', file: targetFile, line: u.line });
+                    };
+                  }
+                  usesHost.appendChild(chip);
+                }
+              }
               infoEl.style.display = 'block';
             });
           }
