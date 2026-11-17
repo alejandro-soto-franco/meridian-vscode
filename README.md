@@ -15,11 +15,11 @@ Meridian draws an interactive map of how the declarations in the current file de
 
 Open any `.lean` file and a panel beside the editor renders its 2-hop dependency graph:
 
-- **Gold imports** on the left column (direct imports the file actually uses).
-- **Blue-and-gold Mathlib imports** for Mathlib files providing referenced symbols, including transitive ones resolved through a full-project Mathlib index.
-- **Purple Mathlib refs** in the middle column.
-- **Green / yellow / red status nodes** for project declarations, coloured by whether they're complete, partial, or pure `sorry` stubs.
-- **Grey Std / Lean refs** kept visually recessed.
+- Gold imports on the left column (direct imports the file uses).
+- Blue-and-gold Mathlib imports for Mathlib files providing referenced symbols, including transitive ones resolved through a full-project Mathlib index.
+- Purple Mathlib refs in the middle column.
+- Green / yellow / red status nodes for project declarations, coloured by whether they're complete, partial, or pure `sorry` stubs.
+- Grey Std / Lean refs kept visually recessed.
 
 Click to focus a node and light up its incident edges; double-click to jump to the source. Click an edge for a pill showing from → to, usage count, and every line where the reference appears, tagged as **signature** (type-level, harder to refactor) or **body / proof** (value-level, easier).
 
@@ -31,7 +31,7 @@ Each declaration body is classified:
 - ⚠ **partial**: some proof work and at least one `sorry`
 - ⛔ **stub**: a `sorry` and nothing else
 
-Module-level status propagates to import edges, so a dependency chain that bottoms out in an unfinished module is visible from the top of the file.
+Module-level status propagates to import edges. A dependency chain that bottoms out in an unfinished module is visible from the top of the file.
 
 ### Sorry inventory
 
@@ -58,7 +58,7 @@ Every Meridian `#` command and tactic has a palette entry: `#sorry_inventory`, `
 ## Requirements
 
 - [Lean 4 VS Code extension](https://marketplace.visualstudio.com/items?itemName=leanprover.lean4), installed automatically as a dependency.
-- A Lake project. The dependency graph works in any Lake project. Coverage, Gap Report, and Sorry Inventory (palette version) additionally require [Meridian](https://github.com/alejandro-soto-franco/Meridian) as a Lake dependency:
+- A Lake project. The dependency graph works in any Lake project. Coverage, Gap Report, and Sorry Inventory (palette version) also require [Meridian](https://github.com/alejandro-soto-franco/Meridian) as a Lake dependency:
 
   ```toml
   [[require]]
@@ -106,7 +106,7 @@ Every Meridian `#` command and tactic has a palette entry: `#sorry_inventory`, `
 
 ## Diagnostics
 
-- **`Meridian: Show Output Channel`** opens the extension's log (lake root, root import, Meridian dependency detection, every scratch source and its Lean output).
+- `Meridian: Show Output Channel` opens the extension's log (lake root, root import, Meridian dependency detection, every scratch source and its Lean output).
 - The same log mirrors to `~/.meridian-vscode.log` so it's inspectable without opening VS Code.
 
 ---
